@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root { --brand: #0ea5e9; --income: #22c55e; --expense: #f43f5e; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { @apply bg-surface-50 text-surface-900 font-sans antialiased dark:bg-surface-950 dark:text-slate-100; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full dark:bg-slate-600; }
+}
+
+@layer components {
+  .card { @apply bg-white rounded-lg p-5 shadow-card border border-slate-100 dark:bg-surface-800 dark:border-surface-700; }
+  .btn { @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700 active:scale-95; }
+  .btn-secondary { @apply btn bg-surface-100 text-surface-800 hover:bg-surface-200 dark:bg-surface-700 dark:text-slate-100 dark:hover:bg-surface-600 active:scale-95; }
+  .btn-danger { @apply btn bg-rose-500 text-white hover:bg-rose-600 active:scale-95; }
+  .btn-ghost { @apply btn text-surface-700 hover:bg-surface-100 dark:text-slate-300 dark:hover:bg-surface-800 active:scale-95; }
+  .input { @apply w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent dark:bg-surface-800 dark:border-surface-600 dark:text-slate-100 dark:focus:ring-brand-400 transition-all; }
+  .label { @apply block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1; }
+  .badge { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium; }
+  .badge-income { @apply badge bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400; }
+  .badge-expense { @apply badge bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400; }
+  .nav-link { @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-surface-100 hover:text-slate-900 transition-all dark:text-slate-400 dark:hover:bg-surface-800 dark:hover:text-slate-100; }
+  .nav-link-active { @apply bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400; }
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(.95); } to { opacity: 1; transform: scale(1); } }
+.animate-fade-in { animation: fadeIn .25s ease both; }
+.animate-slide-in { animation: slideIn .2s ease both; }
+.animate-scale-in { animation: scaleIn .2s ease both; }
+.stagger > *:nth-child(1) { animation-delay: .05s; }
+.stagger > *:nth-child(2) { animation-delay: .10s; }
+.stagger > *:nth-child(3) { animation-delay: .15s; }
+.stagger > *:nth-child(4) { animation-delay: .20s; }
+.stagger > *:nth-child(5) { animation-delay: .25s; }
+
+/* ── CSS Variables (light/dark) ─────────────────────────────── */
+:root {
+  --bg:          #f8fafc;
+  --bg-card:     #ffffff;
+  --border:      #e2e8f0;
+  --text:        #0f172a;
+  --text-muted:  #64748b;
+  --sidebar-bg:  #0f172a;
+}
+
+.dark {
+  --bg:          #080f1a;
+  --bg-card:     #1e293b;
+  --border:      #334155;
+  --text:        #f1f5f9;
+  --text-muted:  #94a3b8;
+  --sidebar-bg:  #080f1a;
+}
+
+/* Utility shortcuts for CSS vars */
+.text-display { font-family: 'Syne', sans-serif; }
+.text-mono    { font-family: 'DM Mono', monospace; }
+.text-income  { color: var(--income, #22c55e); }
+.text-expense { color: var(--expense, #f43f5e); }
+
+/* Animate-fade-up alias */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.animate-fade-up { animation: fadeUp .3s ease both; }

@@ -1,0 +1,52 @@
+version: '3.9'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: fintrack-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: fintrack_root
+      MYSQL_DATABASE:      fintrack
+      MYSQL_USER:          fintrack_user
+      MYSQL_PASSWORD:      fintrack_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fintrack-api
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      PORT:         4000
+      DB_HOST:      mysql
+      DB_PORT:      3306
+      DB_USER:      fintrack_user
+      DB_PASSWORD:  fintrack_pass
+      DB_NAME:      fintrack
+      JWT_SECRET:   change_this_to_a_long_random_secret
+      JWT_EXPIRES_IN: 7d
+      FRONTEND_URL: http://localhost:5173
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context:    ./frontend
+      dockerfile: Dockerfile
+    container_name: fintrack-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  db_data:
