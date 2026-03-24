@@ -14,7 +14,8 @@ const r = Router();
 r.post('/auth/register', auth.register);
 r.post('/auth/login',    auth.login);
 r.get ('/auth/me',       authenticate, auth.me);
-r.put ('/auth/profile',  authenticate, auth.updateProfile);
+r.put ('/auth/profile',             authenticate, auth.updateProfile);
+r.put ('/auth/onboarding/complete', authenticate, auth.completeOnboarding);
 
 // Dashboard
 r.get('/dashboard', authenticate, dash.getDashboard);

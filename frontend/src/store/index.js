@@ -38,6 +38,11 @@ export const useStore = create(
         delete api.defaults.headers.common['Authorization'];
       },
 
+      completeOnboarding: async () => {
+        await api.put('/auth/onboarding/complete');
+        set((s) => ({ user: { ...s.user, onboarding_completed: 1 } }));
+      },
+
       initAuth: () => {
         const { token, darkMode } = get();
         if (token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`;

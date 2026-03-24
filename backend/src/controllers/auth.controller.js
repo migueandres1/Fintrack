@@ -16,7 +16,7 @@ export async function register(req, res) {
       'INSERT INTO users (name, email, password_hash, currency) VALUES (?,?,?,?)',
       [name, email, hash, currency]
     );
-    const user = { id: result.insertId, name, email, currency };
+    const user = { id: result.insertId, name, email, currency, onboarding_completed: 0 };
     res.status(201).json({ token: sign(user.id), user });
   } catch (err) {
     console.error(err);
@@ -28,7 +28,7 @@ export async function login(req, res) {
   const { email, password } = req.body;
   try {
     const [rows] = await pool.query(
-      'SELECT id, name, email, password_hash, currency, dark_mode FROM users WHERE email = ?',
+      'SELECT id, name, email, password_hash, currency, dark_mode, onboarding_completed FROM users WHERE email = ?',
       [email]
     );
     const user = rows[0];
@@ -48,11 +48,20 @@ export async function login(req, res) {
 export async function me(req, res) {
   try {
     const [rows] = await pool.query(
-      'SELECT id, name, email, currency, dark_mode, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, currency, dark_mode, onboarding_completed, created_at FROM users WHERE id = ?',
       [req.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+}
+
+export async function completeOnboarding(req, res) {
+  try {
+    await pool.query('UPDATE users SET onboarding_completed = 1 WHERE id = ?', [req.userId]);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
   }

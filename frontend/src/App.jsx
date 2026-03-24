@@ -10,10 +10,22 @@ import Debts from './pages/Debts.jsx';
 import Savings from './pages/Savings.jsx';
 import Planning     from './pages/Planning.jsx';
 import CreditCards  from './pages/CreditCards.jsx';
+import Onboarding   from './pages/Onboarding.jsx';
 
 function RequireAuth({ children }) {
   const token = useStore((s) => s.token);
-  return token ? children : <Navigate to="/login" replace />;
+  const user  = useStore((s) => s.user);
+  if (!token) return <Navigate to="/login" replace />;
+  if (user?.onboarding_completed === 0) return <Navigate to="/onboarding" replace />;
+  return children;
+}
+
+function RequireOnboarding({ children }) {
+  const token = useStore((s) => s.token);
+  const user  = useStore((s) => s.user);
+  if (!token) return <Navigate to="/login" replace />;
+  if (user?.onboarding_completed === 1) return <Navigate to="/" replace />;
+  return children;
 }
 
 function RedirectIfAuth({ children }) {
@@ -40,6 +52,7 @@ export default function App() {
         <Route path="planning"      element={<Planning />} />
         <Route path="credit-cards"  element={<CreditCards />} />
       </Route>
+      <Route path="/onboarding" element={<RequireOnboarding><Onboarding /></RequireOnboarding>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
