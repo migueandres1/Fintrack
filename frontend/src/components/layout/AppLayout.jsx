@@ -7,6 +7,28 @@ import {
 import { useStore } from '../../store/index.js';
 import clsx        from 'clsx';
 
+function UserRow({ user, onLogout }) {
+  const nav = useNavigate();
+  return (
+    <div className="flex items-center gap-3 px-4 py-2">
+      <button
+        onClick={() => nav('/profile')}
+        className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold text-sm hover:bg-brand-500/30 transition-colors shrink-0"
+        title="Mi perfil"
+      >
+        {user?.name?.[0]?.toUpperCase()}
+      </button>
+      <button onClick={() => nav('/profile')} className="flex-1 min-w-0 text-left hover:opacity-80 transition-opacity">
+        <p className="text-xs font-medium text-white truncate">{user?.name}</p>
+        <p className="text-xs text-white/40 truncate">{user?.currency}</p>
+      </button>
+      <button onClick={onLogout} className="text-white/40 hover:text-rose-400 transition-colors" title="Cerrar sesión">
+        <LogOut size={16} />
+      </button>
+    </div>
+  );
+}
+
 const NAV = [
   { to: '/',            icon: LayoutDashboard,   label: 'Dashboard' },
   { to: '/transactions',icon: ArrowRightLeft,    label: 'Transacciones' },
@@ -69,18 +91,7 @@ export default function AppLayout() {
           {darkMode ? 'Modo claro' : 'Modo oscuro'}
         </button>
 
-        <div className="flex items-center gap-3 px-4 py-2">
-          <div className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold text-sm">
-            {user?.name?.[0]?.toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white truncate">{user?.name}</p>
-            <p className="text-xs text-white/40 truncate">{user?.currency}</p>
-          </div>
-          <button onClick={handleLogout} className="text-white/40 hover:text-rose-400 transition-colors">
-            <LogOut size={16} />
-          </button>
-        </div>
+        <UserRow user={user} onLogout={handleLogout} />
       </div>
     </div>
   );

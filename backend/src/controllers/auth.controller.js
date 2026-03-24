@@ -79,3 +79,27 @@ export async function updateProfile(req, res) {
     res.status(500).json({ error: 'Error interno' });
   }
 }
+
+export async function changePassword(req, res) {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: 'Faltan campos requeridos' });
+  }
+  if (new_password.length < 8) {
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+  }
+  try {
+    const [rows] = await pool.query('SELECT password_hash FROM users WHERE id = ?', [req.userId]);
+    if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const valid = await bcrypt.compare(current_password, rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+
+    const hash = await bcrypt.hash(new_password, 12);
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.userId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error interno' });
+  }
+}

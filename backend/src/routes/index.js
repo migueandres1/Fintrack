@@ -16,6 +16,7 @@ r.post('/auth/login',    auth.login);
 r.get ('/auth/me',       authenticate, auth.me);
 r.put ('/auth/profile',             authenticate, auth.updateProfile);
 r.put ('/auth/onboarding/complete', authenticate, auth.completeOnboarding);
+r.put ('/auth/password',            authenticate, auth.changePassword);
 
 // Dashboard
 r.get('/dashboard', authenticate, dash.getDashboard);
