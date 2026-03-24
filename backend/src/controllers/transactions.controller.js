@@ -1,5 +1,117 @@
 import pool from '../config/db.js';
 
+// ── Helpers de integridad ──────────────────────────────────────────────────
+
+/**
+ * Recalcula current_balance de una deuda sumando todos sus pagos registrados.
+ * Fuente de verdad: debt_payments. No usa incrementos.
+ */
+async function recomputeDebtBalance(conn, debtId) {
+  const [[{ paid }]] = await conn.query(
+    `SELECT COALESCE(SUM(principal_paid + extra_principal), 0) AS paid
+     FROM debt_payments WHERE debt_id = ?`,
+    [debtId]
+  );
+  const [[debt]] = await conn.query(
+    'SELECT initial_balance FROM debts WHERE id = ?', [debtId]
+  );
+  if (!debt) return;
+  const newBalance = +Math.max(0, Number(debt.initial_balance) - Number(paid)).toFixed(2);
+  await conn.query(
+    'UPDATE debts SET current_balance=?, is_active=? WHERE id=?',
+    [newBalance, newBalance > 0 ? 1 : 0, debtId]
+  );
+}
+
+/**
+ * Recalcula current_amount de una meta sumando todos sus aportes registrados.
+ * Fuente de verdad: savings_contributions. No usa incrementos.
+ */
+async function recomputeGoalAmount(conn, goalId) {
+  const [[{ total }]] = await conn.query(
+    `SELECT COALESCE(SUM(amount), 0) AS total
+     FROM savings_contributions WHERE goal_id = ?`,
+    [goalId]
+  );
+  const [[goal]] = await conn.query(
+    'SELECT target_amount FROM savings_goals WHERE id = ?', [goalId]
+  );
+  if (!goal) return;
+  const newTotal = +Number(total).toFixed(2);
+  await conn.query(
+    'UPDATE savings_goals SET current_amount=?, is_completed=? WHERE id=?',
+    [newTotal, newTotal >= Number(goal.target_amount) ? 1 : 0, goalId]
+  );
+}
+
+/**
+ * Aplica los efectos secundarios de una transacción:
+ * - Si tiene debt_id: crea registro en debt_payments y recalcula saldo de la deuda.
+ * - Si tiene savings_goal_id: crea aporte y recalcula monto de la meta.
+ */
+async function applyEffects(conn, txnId, userId, { debt_id, savings_goal_id, amount, extra_principal, txn_date, description }) {
+  if (debt_id) {
+    const [[debt]] = await conn.query(
+      'SELECT * FROM debts WHERE id = ? AND user_id = ?', [debt_id, userId]
+    );
+    if (debt) {
+      const r             = Number(debt.annual_rate) / 12;
+      const interest_paid = +(Number(debt.current_balance) * r).toFixed(2);
+      const principal_paid = +Math.min(
+        amount - interest_paid - extra_principal,
+        Number(debt.current_balance)
+      ).toFixed(2);
+      const balance_after = +Math.max(
+        Number(debt.current_balance) - principal_paid - extra_principal, 0
+      ).toFixed(2);
+
+      await conn.query(
+        `INSERT INTO debt_payments
+           (debt_id, transaction_id, payment_date, total_amount,
+            principal_paid, interest_paid, extra_principal, balance_after, notes)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        [debt_id, txnId, txn_date, amount,
+         principal_paid, interest_paid, extra_principal, balance_after,
+         description || null]
+      );
+      await recomputeDebtBalance(conn, debt_id);
+    }
+  }
+
+  if (savings_goal_id) {
+    const [[goal]] = await conn.query(
+      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?', [savings_goal_id, userId]
+    );
+    if (goal) {
+      await conn.query(
+        `INSERT INTO savings_contributions
+           (goal_id, transaction_id, amount, contrib_date, notes)
+         VALUES (?,?,?,?,?)`,
+        [savings_goal_id, txnId, amount, txn_date, description || null]
+      );
+      await recomputeGoalAmount(conn, savings_goal_id);
+    }
+  }
+}
+
+/**
+ * Revierte los efectos secundarios de una transacción:
+ * - Elimina su registro en debt_payments (por transaction_id) y recalcula saldo.
+ * - Elimina su aporte en savings_contributions (por transaction_id) y recalcula monto.
+ */
+async function reverseEffects(conn, txnId, { debt_id, savings_goal_id }) {
+  if (debt_id) {
+    await conn.query('DELETE FROM debt_payments WHERE transaction_id = ?', [txnId]);
+    await recomputeDebtBalance(conn, debt_id);
+  }
+  if (savings_goal_id) {
+    await conn.query('DELETE FROM savings_contributions WHERE transaction_id = ?', [txnId]);
+    await recomputeGoalAmount(conn, savings_goal_id);
+  }
+}
+
+// ── Handlers ───────────────────────────────────────────────────────────────
+
 export async function list(req, res) {
   const { type, category_id, from, to, page = 1, limit = 50 } = req.query;
   const offset = (page - 1) * limit;
@@ -39,66 +151,32 @@ export async function create(req, res) {
   try {
     await conn.beginTransaction();
 
-    // 1. Insertar transacción
     const [result] = await conn.query(
       `INSERT INTO transactions
          (user_id, category_id, type, amount, description, txn_date,
           debt_id, savings_goal_id, credit_card_id, extra_principal)
        VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [req.userId, category_id, type, amount, description, txn_date,
-       debt_id || null, savings_goal_id || null, credit_card_id || null, extra_principal]
+       debt_id || null, savings_goal_id || null, credit_card_id || null,
+       Number(extra_principal) || 0]
     );
+    const txnId = result.insertId;
 
-    // 2. Si viene deuda → registrar pago y actualizar saldo
-    if (debt_id) {
-      const [[debt]] = await conn.query(
-        'SELECT * FROM debts WHERE id = ? AND user_id = ?', [debt_id, req.userId]
-      );
-      if (debt) {
-        const r             = debt.annual_rate / 12;
-        const interest_paid = +(debt.current_balance * r).toFixed(2);
-        const principal_paid= +(Math.min(amount - interest_paid - extra_principal, debt.current_balance)).toFixed(2);
-        const balance_after = +(Math.max(debt.current_balance - principal_paid - Number(extra_principal), 0)).toFixed(2);
-
-        await conn.query(
-          `INSERT INTO debt_payments
-             (debt_id, payment_date, total_amount, principal_paid, interest_paid, extra_principal, balance_after, notes)
-           VALUES (?,?,?,?,?,?,?,?)`,
-          [debt_id, txn_date, amount, principal_paid, interest_paid, extra_principal, balance_after, description]
-        );
-        await conn.query(
-          'UPDATE debts SET current_balance=?, is_active=? WHERE id=?',
-          [balance_after, balance_after > 0 ? 1 : 0, debt_id]
-        );
-      }
-    }
-
-    // 3. Si viene meta de ahorro → registrar aporte y actualizar progreso
-    if (savings_goal_id) {
-      const [[goal]] = await conn.query(
-        'SELECT * FROM savings_goals WHERE id = ? AND user_id = ?', [savings_goal_id, req.userId]
-      );
-      if (goal) {
-        const newAmount   = +(goal.current_amount + Number(amount)).toFixed(2);
-        const isCompleted = newAmount >= goal.target_amount ? 1 : 0;
-
-        await conn.query(
-          'INSERT INTO savings_contributions (goal_id, amount, contrib_date, notes) VALUES (?,?,?,?)',
-          [savings_goal_id, amount, txn_date, description]
-        );
-        await conn.query(
-          'UPDATE savings_goals SET current_amount=?, is_completed=? WHERE id=?',
-          [newAmount, isCompleted, savings_goal_id]
-        );
-      }
-    }
+    await applyEffects(conn, txnId, req.userId, {
+      debt_id:         debt_id         || null,
+      savings_goal_id: savings_goal_id || null,
+      amount:          Number(amount),
+      extra_principal: Number(extra_principal) || 0,
+      txn_date,
+      description,
+    });
 
     await conn.commit();
 
     const [rows] = await conn.query(
       `SELECT t.*, c.name AS category_name, c.icon, c.color
        FROM transactions t JOIN categories c ON c.id = t.category_id
-       WHERE t.id = ?`, [result.insertId]
+       WHERE t.id = ?`, [txnId]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -114,13 +192,28 @@ export async function update(req, res) {
   const { id } = req.params;
   const { category_id, type, amount, description, txn_date,
           debt_id, savings_goal_id, credit_card_id, extra_principal } = req.body;
-  try {
-    const [check] = await pool.query(
-      'SELECT id FROM transactions WHERE id = ? AND user_id = ?', [id, req.userId]
-    );
-    if (!check.length) return res.status(404).json({ error: 'No encontrado' });
 
-    await pool.query(
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Leer estado anterior completo
+    const [[old]] = await conn.query(
+      'SELECT * FROM transactions WHERE id = ? AND user_id = ?', [id, req.userId]
+    );
+    if (!old) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'No encontrado' });
+    }
+
+    // 1. Revertir efectos del estado anterior
+    await reverseEffects(conn, Number(id), {
+      debt_id:         old.debt_id,
+      savings_goal_id: old.savings_goal_id,
+    });
+
+    // 2. Actualizar la transacción
+    await conn.query(
       `UPDATE transactions
        SET category_id=?, type=?, amount=?, description=?, txn_date=?,
            debt_id=?, savings_goal_id=?, credit_card_id=?, extra_principal=?
@@ -129,28 +222,64 @@ export async function update(req, res) {
        debt_id || null, savings_goal_id || null, credit_card_id || null,
        Number(extra_principal) || 0, id]
     );
-    const [rows] = await pool.query(
+
+    // 3. Aplicar efectos del nuevo estado
+    await applyEffects(conn, Number(id), req.userId, {
+      debt_id:         debt_id         || null,
+      savings_goal_id: savings_goal_id || null,
+      amount:          Number(amount),
+      extra_principal: Number(extra_principal) || 0,
+      txn_date,
+      description,
+    });
+
+    await conn.commit();
+
+    const [rows] = await conn.query(
       `SELECT t.*, c.name AS category_name, c.icon, c.color
        FROM transactions t JOIN categories c ON c.id = t.category_id
        WHERE t.id = ?`, [id]
     );
     res.json(rows[0]);
   } catch (err) {
+    await conn.rollback();
+    console.error(err);
     res.status(500).json({ error: 'Error interno' });
+  } finally {
+    conn.release();
   }
 }
 
 export async function remove(req, res) {
   const { id } = req.params;
+  const conn = await pool.getConnection();
   try {
-    const [check] = await pool.query(
-      'SELECT id FROM transactions WHERE id = ? AND user_id = ?', [id, req.userId]
+    await conn.beginTransaction();
+
+    const [[txn]] = await conn.query(
+      'SELECT * FROM transactions WHERE id = ? AND user_id = ?', [id, req.userId]
     );
-    if (!check.length) return res.status(404).json({ error: 'No encontrado' });
-    await pool.query('DELETE FROM transactions WHERE id = ?', [id]);
+    if (!txn) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'No encontrado' });
+    }
+
+    // Revertir efectos antes de eliminar
+    await reverseEffects(conn, Number(id), {
+      debt_id:         txn.debt_id,
+      savings_goal_id: txn.savings_goal_id,
+    });
+
+    await conn.query('DELETE FROM transactions WHERE id = ?', [id]);
+
+    await conn.commit();
     res.json({ success: true });
   } catch (err) {
+    await conn.rollback();
+    console.error(err);
     res.status(500).json({ error: 'Error interno' });
+  } finally {
+    conn.release();
   }
 }
 

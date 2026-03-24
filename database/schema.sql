@@ -1,5 +1,5 @@
 -- ============================================================
--- FinTrack – Schema MySQL optimizado
+-- FinTrack – Schema MySQL
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS fintrack CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -20,11 +20,11 @@ CREATE TABLE users (
 );
 
 -- ------------------------------------------------------------
--- CATEGORÍAS DE TRANSACCIÓN
+-- CATEGORÍAS
 -- ------------------------------------------------------------
 CREATE TABLE categories (
   id      INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id INT UNSIGNED,                            -- NULL = categoría global
+  user_id INT UNSIGNED,
   name    VARCHAR(80)  NOT NULL,
   type    ENUM('income','expense') NOT NULL,
   icon    VARCHAR(40)  NOT NULL DEFAULT 'circle',
@@ -32,25 +32,83 @@ CREATE TABLE categories (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Categorías globales por defecto
 INSERT INTO categories (user_id, name, type, icon, color) VALUES
-  (NULL, 'Salario',        'income',  'briefcase',    '#22c55e'),
-  (NULL, 'Freelance',      'income',  'laptop',       '#10b981'),
-  (NULL, 'Inversiones',    'income',  'trending-up',  '#06b6d4'),
-  (NULL, 'Otros ingresos', 'income',  'plus-circle',  '#84cc16'),
-  (NULL, 'Alimentación',   'expense', 'utensils',     '#f59e0b'),
-  (NULL, 'Transporte',     'expense', 'car',          '#3b82f6'),
-  (NULL, 'Vivienda',       'expense', 'home',         '#8b5cf6'),
-  (NULL, 'Salud',          'expense', 'heart-pulse',  '#ef4444'),
-  (NULL, 'Educación',      'expense', 'graduation',   '#f97316'),
-  (NULL, 'Entretenimiento','expense', 'gamepad',      '#ec4899'),
-  (NULL, 'Ropa',           'expense', 'shirt',        '#a855f7'),
-  (NULL, 'Servicios',      'expense', 'zap',          '#14b8a6'),
-  (NULL, 'Otros gastos',   'expense', 'more-horizontal','#6b7280'),
-  (NULL, 'Ahorro',         'expense', 'piggy-bank',     '#10b981');
+  (NULL, 'Salario',         'income',  'briefcase',      '#22c55e'),
+  (NULL, 'Freelance',       'income',  'laptop',         '#10b981'),
+  (NULL, 'Inversiones',     'income',  'trending-up',    '#06b6d4'),
+  (NULL, 'Otros ingresos',  'income',  'plus-circle',    '#84cc16'),
+  (NULL, 'Alimentación',    'expense', 'utensils',       '#f59e0b'),
+  (NULL, 'Transporte',      'expense', 'car',            '#3b82f6'),
+  (NULL, 'Vivienda',        'expense', 'home',           '#8b5cf6'),
+  (NULL, 'Salud',           'expense', 'heart-pulse',    '#ef4444'),
+  (NULL, 'Educación',       'expense', 'graduation',     '#f97316'),
+  (NULL, 'Entretenimiento', 'expense', 'gamepad',        '#ec4899'),
+  (NULL, 'Ropa',            'expense', 'shirt',          '#a855f7'),
+  (NULL, 'Servicios',       'expense', 'zap',            '#14b8a6'),
+  (NULL, 'Otros gastos',    'expense', 'more-horizontal','#6b7280'),
+  (NULL, 'Ahorro',          'expense', 'piggy-bank',     '#10b981');
+
+-- ------------------------------------------------------------
+-- DEUDAS
+-- ------------------------------------------------------------
+CREATE TABLE debts (
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id          INT UNSIGNED  NOT NULL,
+  name             VARCHAR(120)  NOT NULL,
+  initial_balance  DECIMAL(14,2) NOT NULL CHECK (initial_balance > 0),
+  current_balance  DECIMAL(14,2) NOT NULL,
+  annual_rate      DECIMAL(6,4)  NOT NULL COMMENT 'Tasa anual en decimal, ej: 0.24 = 24%',
+  monthly_payment  DECIMAL(14,2) NOT NULL,
+  payment_day      TINYINT       NOT NULL DEFAULT 1 COMMENT 'Día del mes en que vence el pago',
+  start_date       DATE          NOT NULL,
+  is_active        TINYINT(1)    NOT NULL DEFAULT 1,
+  notes            TEXT,
+  created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_debt_user (user_id)
+);
+
+-- ------------------------------------------------------------
+-- METAS DE AHORRO
+-- ------------------------------------------------------------
+CREATE TABLE savings_goals (
+  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id         INT UNSIGNED  NOT NULL,
+  name            VARCHAR(120)  NOT NULL,
+  target_amount   DECIMAL(14,2) NOT NULL CHECK (target_amount > 0),
+  current_amount  DECIMAL(14,2) NOT NULL DEFAULT 0,
+  deadline        DATE,
+  icon            VARCHAR(40)   NOT NULL DEFAULT 'piggy-bank',
+  color           CHAR(7)       NOT NULL DEFAULT '#6366f1',
+  is_completed    TINYINT(1)    NOT NULL DEFAULT 0,
+  created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_goal_user (user_id)
+);
+
+-- ------------------------------------------------------------
+-- TARJETAS DE CRÉDITO
+-- ------------------------------------------------------------
+CREATE TABLE credit_cards (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id      INT UNSIGNED  NOT NULL,
+  name         VARCHAR(120)  NOT NULL,
+  last_four    CHAR(4),
+  credit_limit DECIMAL(14,2) NOT NULL DEFAULT 0,
+  billing_day  TINYINT       NOT NULL DEFAULT 1  COMMENT 'Día de corte mensual',
+  due_day      TINYINT       NOT NULL DEFAULT 20 COMMENT 'Día límite de pago',
+  color        CHAR(7)       NOT NULL DEFAULT '#6366f1',
+  notes        VARCHAR(255),
+  created_at   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_cc_user (user_id)
+);
 
 -- ------------------------------------------------------------
 -- TRANSACCIONES
+-- (después de debts, savings_goals y credit_cards)
 -- ------------------------------------------------------------
 CREATE TABLE transactions (
   id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -76,32 +134,12 @@ CREATE TABLE transactions (
 );
 
 -- ------------------------------------------------------------
--- DEUDAS
--- ------------------------------------------------------------
-CREATE TABLE debts (
-  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id          INT UNSIGNED  NOT NULL,
-  name             VARCHAR(120)  NOT NULL,
-  initial_balance  DECIMAL(14,2) NOT NULL CHECK (initial_balance > 0),
-  current_balance  DECIMAL(14,2) NOT NULL,
-  annual_rate      DECIMAL(6,4)  NOT NULL COMMENT 'Tasa anual en decimal, ej: 0.24 = 24%',
-  monthly_payment  DECIMAL(14,2) NOT NULL,
-  payment_day      TINYINT       NOT NULL DEFAULT 1 COMMENT 'Día del mes en que vence el pago',
-  start_date       DATE          NOT NULL,
-  is_active        TINYINT(1)    NOT NULL DEFAULT 1,
-  notes            TEXT,
-  created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_debt_user (user_id)
-);
-
--- ------------------------------------------------------------
 -- PAGOS DE DEUDAS
 -- ------------------------------------------------------------
 CREATE TABLE debt_payments (
   id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   debt_id         INT UNSIGNED  NOT NULL,
+  transaction_id  INT UNSIGNED  NULL COMMENT 'Transacción origen (NULL = pago directo)',
   payment_date    DATE          NOT NULL,
   total_amount    DECIMAL(14,2) NOT NULL CHECK (total_amount > 0),
   principal_paid  DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -110,42 +148,28 @@ CREATE TABLE debt_payments (
   balance_after   DECIMAL(14,2) NOT NULL,
   notes           TEXT,
   created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (debt_id) REFERENCES debts(id) ON DELETE CASCADE,
+  FOREIGN KEY (debt_id)        REFERENCES debts(id)        ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
   INDEX idx_dpay_debt (debt_id),
+  INDEX idx_dpay_txn  (transaction_id),
   INDEX idx_dpay_date (payment_date)
-);
-
--- ------------------------------------------------------------
--- METAS DE AHORRO
--- ------------------------------------------------------------
-CREATE TABLE savings_goals (
-  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id         INT UNSIGNED  NOT NULL,
-  name            VARCHAR(120)  NOT NULL,
-  target_amount   DECIMAL(14,2) NOT NULL CHECK (target_amount > 0),
-  current_amount  DECIMAL(14,2) NOT NULL DEFAULT 0,
-  deadline        DATE,
-  icon            VARCHAR(40)   NOT NULL DEFAULT 'piggy-bank',
-  color           CHAR(7)       NOT NULL DEFAULT '#6366f1',
-  is_completed    TINYINT(1)    NOT NULL DEFAULT 0,
-  created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_goal_user (user_id)
 );
 
 -- ------------------------------------------------------------
 -- APORTES A METAS
 -- ------------------------------------------------------------
 CREATE TABLE savings_contributions (
-  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  goal_id     INT UNSIGNED  NOT NULL,
-  amount      DECIMAL(14,2) NOT NULL CHECK (amount > 0),
-  contrib_date DATE         NOT NULL,
-  notes       VARCHAR(255),
-  created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (goal_id) REFERENCES savings_goals(id) ON DELETE CASCADE,
-  INDEX idx_contrib_goal (goal_id)
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  goal_id        INT UNSIGNED  NOT NULL,
+  transaction_id INT UNSIGNED  NULL COMMENT 'Transacción origen (NULL = aporte directo)',
+  amount         DECIMAL(14,2) NOT NULL CHECK (amount > 0),
+  contrib_date   DATE          NOT NULL,
+  notes          VARCHAR(255),
+  created_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (goal_id)        REFERENCES savings_goals(id) ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id)  ON DELETE SET NULL,
+  INDEX idx_contrib_goal (goal_id),
+  INDEX idx_contrib_txn  (transaction_id)
 );
 
 -- ------------------------------------------------------------
@@ -176,24 +200,6 @@ CREATE TABLE recurring_transactions (
 );
 
 -- ------------------------------------------------------------
--- TARJETAS DE CRÉDITO
--- ------------------------------------------------------------
-CREATE TABLE credit_cards (
-  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id      INT UNSIGNED  NOT NULL,
-  name         VARCHAR(120)  NOT NULL,
-  last_four    CHAR(4),
-  credit_limit DECIMAL(14,2) NOT NULL DEFAULT 0,
-  billing_day  TINYINT       NOT NULL DEFAULT 1  COMMENT 'Día de corte mensual',
-  due_day      TINYINT       NOT NULL DEFAULT 20 COMMENT 'Día límite de pago',
-  color        CHAR(7)       NOT NULL DEFAULT '#6366f1',
-  notes        VARCHAR(255),
-  created_at   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_cc_user (user_id)
-);
-
--- ------------------------------------------------------------
 -- PAGOS ADELANTADOS PLANIFICADOS
 -- ------------------------------------------------------------
 CREATE TABLE debt_planned_payments (
@@ -209,16 +215,14 @@ CREATE TABLE debt_planned_payments (
 );
 
 -- ============================================================
--- SEED DATA – Usuario demo + datos de ejemplo
+-- SEED DATA – Usuario demo
 -- ============================================================
 
--- Usuario demo (password: 12345678)
 INSERT INTO users (name, email, password_hash, currency) VALUES
   ('Miguel Demo', 'demo@fintrack.app', '$2b$12$5iKgRtm0bdvI5dJn695Lxufy9d0U46ZsQOV0ts7gaUE10b3NShX2K', 'USD');
 
 SET @uid = LAST_INSERT_ID();
 
--- Transacciones (últimos 3 meses)
 INSERT INTO transactions (user_id, category_id, type, amount, description, txn_date) VALUES
   (@uid,  1, 'income',  2800.00, 'Salario enero',          '2026-01-05'),
   (@uid,  2, 'income',   450.00, 'Proyecto freelance web',  '2026-01-12'),
@@ -242,36 +246,30 @@ INSERT INTO transactions (user_id, category_id, type, amount, description, txn_d
   (@uid, 11, 'expense',  150.00, 'Ropa nueva',              '2026-03-14'),
   (@uid, 10, 'expense',   55.00, 'Suscripciones',           '2026-03-15');
 
--- Deudas
-INSERT INTO debts (user_id, name, initial_balance, current_balance, annual_rate, monthly_payment, start_date, notes) VALUES
-  (@uid, 'Tarjeta de crédito Visa',  5000.00, 3250.40, 0.2400, 250.00, '2025-06-01', 'Banco Agrícola'),
-  (@uid, 'Préstamo personal',       10000.00, 7842.15, 0.1800, 320.00, '2025-03-01', 'Cooperativa');
+INSERT INTO debts (user_id, name, initial_balance, current_balance, annual_rate, monthly_payment, payment_day, start_date, notes) VALUES
+  (@uid, 'Tarjeta de crédito Visa',  5000.00, 3250.40, 0.2400, 250.00, 1, '2025-06-01', 'Banco Agrícola'),
+  (@uid, 'Préstamo personal',       10000.00, 7842.15, 0.1800, 320.00, 1, '2025-03-01', 'Cooperativa');
 
 SET @debt1 = (SELECT id FROM debts WHERE user_id = @uid AND name = 'Tarjeta de crédito Visa');
 SET @debt2 = (SELECT id FROM debts WHERE user_id = @uid AND name = 'Préstamo personal');
 
--- Historial de pagos deuda 1
 INSERT INTO debt_payments (debt_id, payment_date, total_amount, principal_paid, interest_paid, extra_principal, balance_after) VALUES
   (@debt1, '2025-07-01', 250.00, 150.00, 100.00,   0.00, 4850.00),
   (@debt1, '2025-08-01', 250.00, 153.00,  97.00,   0.00, 4697.00),
   (@debt1, '2025-09-01', 250.00, 156.06,  93.94,   0.00, 4540.94),
   (@debt1, '2026-01-01', 750.00, 168.00,  82.00, 500.00, 3872.94),
   (@debt1, '2026-02-01', 250.00, 172.00,  78.00,   0.00, 3700.94),
-  (@debt1, '2026-03-01', 250.00, 175.54,  74.46,   0.00, 3525.40);
-
--- Historial de pagos deuda 2
-INSERT INTO debt_payments (debt_id, payment_date, total_amount, principal_paid, interest_paid, extra_principal, balance_after) VALUES
+  (@debt1, '2026-03-01', 250.00, 175.54,  74.46,   0.00, 3525.40),
   (@debt2, '2025-04-01', 320.00, 170.00, 150.00,   0.00, 9830.00),
   (@debt2, '2025-05-01', 320.00, 172.55, 147.45,   0.00, 9657.45),
   (@debt2, '2026-01-01', 820.00, 177.00, 143.00, 500.00, 8342.45),
   (@debt2, '2026-02-01', 320.00, 179.65, 140.35,   0.00, 8162.80),
   (@debt2, '2026-03-01', 320.00, 182.33, 137.67,   0.00, 7980.47);
 
--- Metas de ahorro
 INSERT INTO savings_goals (user_id, name, target_amount, current_amount, deadline, icon, color) VALUES
-  (@uid, 'Fondo de emergencia', 5000.00, 2150.00, '2026-09-30', 'shield',    '#22c55e'),
-  (@uid, 'Viaje a Europa',      3000.00,  780.00, '2026-12-31', 'plane',     '#3b82f6'),
-  (@uid, 'Laptop nueva',        1200.00, 1050.00, '2026-04-30', 'laptop',    '#f59e0b');
+  (@uid, 'Fondo de emergencia', 5000.00, 2150.00, '2026-09-30', 'shield', '#22c55e'),
+  (@uid, 'Viaje a Europa',      3000.00,  780.00, '2026-12-31', 'plane',  '#3b82f6'),
+  (@uid, 'Laptop nueva',        1200.00, 1050.00, '2026-04-30', 'laptop', '#f59e0b');
 
 SET @goal1 = (SELECT id FROM savings_goals WHERE user_id = @uid AND name = 'Fondo de emergencia');
 SET @goal2 = (SELECT id FROM savings_goals WHERE user_id = @uid AND name = 'Viaje a Europa');
