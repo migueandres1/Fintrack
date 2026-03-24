@@ -1,16 +1,17 @@
 # Deploy — FinTrack en Ubuntu 22.04
 
----
+Todo nativo, sin Docker. MySQL, Node.js y Nginx corren directamente en el servidor.
 
-## 1. Conectarse al servidor
-
-```bash
-ssh usuario@IP_SERVIDOR
+```
+Navegador  →  http://IP_SERVIDOR
+                └─► Nginx :80  (sirve el build de React + proxy /api/)
+                      └─► /api/*  ──proxy──►  Node.js/pm2 :4000
+                                                    └─► MySQL :3306
 ```
 
 ---
 
-## 2. Actualizar el sistema
+## 1. Actualizar el sistema
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -18,57 +19,40 @@ sudo apt update && sudo apt upgrade -y
 
 ---
 
-## 3. Instalar MySQL
+## 2. Instalar MySQL
 
 ```bash
 sudo apt install mysql-server -y
 sudo mysql_secure_installation
 ```
 
-`mysql_secure_installation` pregunta varias cosas — responde `Y` a todo para una configuración segura.
-
-### Crear la base de datos y el usuario
+Crear la base de datos y el usuario:
 
 ```bash
 sudo mysql -u root -p
 ```
 
-Dentro de la consola MySQL:
-
 ```sql
 CREATE DATABASE fintrack CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'fintrack_user'@'localhost' IDENTIFIED BY 'tu_password_seguro';
+CREATE USER 'fintrack_user'@'localhost' IDENTIFIED BY 'TuPassword';
 GRANT ALL PRIVILEGES ON fintrack.* TO 'fintrack_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
-### Cargar el schema (más adelante, después de clonar el repo)
+---
+
+## 3. Instalar Node.js 20
 
 ```bash
-mysql -u fintrack_user -p fintrack < ~/fintrack/database/schema.sql
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install nodejs -y
+node --version
 ```
 
 ---
 
-## 4. Instalar Docker
-
-```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-Verificar:
-
-```bash
-docker --version
-docker compose version
-```
-
----
-
-## 5. Instalar Git y clonar el repositorio
+## 4. Instalar Git y clonar el proyecto
 
 ```bash
 sudo apt install git -y
@@ -77,31 +61,29 @@ git clone https://github.com/tu-usuario/fintrack.git
 cd fintrack
 ```
 
-Cargar el schema:
-
-```bash
-mysql -u fintrack_user -p fintrack < database/schema.sql
-```
-
 ---
 
-## 6. Crear el archivo de variables de entorno
+## 5. Crear el .env del backend
 
 ```bash
-nano ~/fintrack/.env
+cp ~/fintrack/backend/.env.example ~/fintrack/backend/.env
+nano ~/fintrack/backend/.env
 ```
 
-Contenido:
-
 ```env
-MYSQL_USER=fintrack_user
-MYSQL_PASSWORD=tu_password_seguro
+PORT=4000
+NODE_ENV=production
+
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=fintrack_user
+DB_PASSWORD=TuPassword
 DB_NAME=fintrack
 
-JWT_SECRET=pegar_aqui_cadena_larga_aleatoria
+JWT_SECRET=PEGAR_AQUI_CADENA_GENERADA
 JWT_EXPIRES_IN=7d
 
-FRONTEND_URL=https://tu-app.vercel.app
+FRONTEND_URL=http://IP_DEL_SERVIDOR
 ```
 
 Generar el JWT_SECRET:
@@ -110,215 +92,167 @@ Generar el JWT_SECRET:
 openssl rand -hex 64
 ```
 
-Copiar el resultado y pegarlo en `JWT_SECRET`.
-
 ---
 
-## 7. Crear el docker-compose de producción
-
-Solo el backend — MySQL corre directo en el servidor.
+## 6. Cargar el schema
 
 ```bash
-nano ~/fintrack/docker-compose.prod.yml
-```
-
-Contenido:
-
-```yaml
-services:
-  backend:
-    build:
-      context: ./backend
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      PORT:           4000
-      DB_HOST:        127.0.0.1
-      DB_PORT:        3306
-      DB_USER:        ${MYSQL_USER}
-      DB_PASSWORD:    ${MYSQL_PASSWORD}
-      DB_NAME:        ${DB_NAME}
-      JWT_SECRET:     ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
-      FRONTEND_URL:   ${FRONTEND_URL}
-```
-
-> `network_mode: host` permite que el contenedor se conecte al MySQL del servidor en `127.0.0.1`.
-
----
-
-## 8. Levantar el backend
-
-```bash
-cd ~/fintrack
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-Verificar que esté corriendo:
-
-```bash
-docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs -f backend
-```
-
-Probar que responde:
-
-```bash
-curl http://localhost:4000/api/health
+mysql -u fintrack_user -p'TuPassword' fintrack < ~/fintrack/database/schema.sql
 ```
 
 ---
 
-## 9. Abrir el firewall
+## 7. Instalar dependencias del backend y levantar con pm2
 
 ```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 4000
-sudo ufw enable
-sudo ufw status
+cd ~/fintrack/backend
+npm install --production
+```
+
+Instalar pm2 globalmente:
+
+```bash
+sudo npm install -g pm2
+```
+
+Levantar el backend:
+
+```bash
+pm2 start src/index.js --name fintrack-api
+pm2 save
+pm2 startup
+# Ejecuta el comando que imprima pm2 startup
+```
+
+Verificar:
+
+```bash
+pm2 status
+pm2 logs fintrack-api --lines 20
 ```
 
 ---
 
-## 10. Instalar Nginx como proxy con SSL
-
-Nginx recibe en el puerto 443 (HTTPS) y reenvía al backend en el 4000. Necesario para que Vercel pueda hacer el rewrite a tu servidor.
-
-### Instalar Nginx y Certbot
+## 8. Buildear el frontend
 
 ```bash
-sudo apt install nginx certbot python3-certbot-nginx -y
+cd ~/fintrack/frontend
+npm install
+npm run build
 ```
 
-### Apuntar el dominio al servidor
+Genera la carpeta `dist/` con los archivos estáticos.
 
-En tu proveedor de DNS, crea un registro A:
+---
 
+## 9. Instalar Nginx y servir el frontend
+
+```bash
+sudo apt install nginx -y
 ```
-api.tudominio.com  →  IP_DEL_SERVIDOR
-```
 
-Espera unos minutos a que propague.
-
-### Crear la configuración de Nginx
+Crear la configuración:
 
 ```bash
 sudo nano /etc/nginx/sites-available/fintrack
 ```
 
-Contenido:
-
 ```nginx
 server {
     listen 80;
-    server_name api.tudominio.com;
+
+    root /home/TU_USUARIO/fintrack/frontend/dist;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://localhost:4000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
 
     location / {
-        proxy_pass         http://localhost:4000;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        try_files $uri $uri/ /index.html;
     }
 }
 ```
+
+> Reemplaza `TU_USUARIO` con el nombre de tu usuario en el servidor (`echo $USER`).
 
 Activar y recargar:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/fintrack /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+sudo ln -s /etc/nginx/sites-available/fintrack /etc/nginx/sites-enabled/fintrack
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### Obtener el certificado SSL
+Dar permisos de lectura a Nginx:
 
 ```bash
-sudo certbot --nginx -d api.tudominio.com
-```
-
-Certbot modifica la config automáticamente y programa la renovación. El backend queda en `https://api.tudominio.com`.
-
-Actualiza `FRONTEND_URL` en el `.env` con la URL de Vercel y reinicia el backend:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d
+chmod 755 /home/TU_USUARIO
+chmod -R 755 ~/fintrack/frontend/dist
 ```
 
 ---
 
-## 11. Configurar el frontend en Vercel
+## 10. Firewall
 
-Crea `frontend/vercel.json` en el repositorio:
-
-```json
-{
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://api.tudominio.com/api/:path*"
-    }
-  ]
-}
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80
+sudo ufw enable
 ```
-
-Luego en [vercel.com](https://vercel.com):
-
-1. **New Project → Import Git Repository**
-2. Selecciona el repo
-3. **Root Directory**: `frontend`
-4. Framework: **Vite** (se detecta automáticamente)
-5. **Deploy**
-
-Cada `git push` a `main` redespliega el frontend automáticamente.
 
 ---
 
-## 12. Actualizar en producción
+Abrir en el navegador: `http://IP_DEL_SERVIDOR`
+
+---
+
+## Actualizar en producción
 
 ```bash
 cd ~/fintrack
 git pull
-docker compose -f docker-compose.prod.yml up -d --build
+
+# Rebuild frontend
+cd frontend
+npm install
+npm run build
+chmod -R 755 ~/fintrack/frontend/dist
+
+# Reiniciar backend
+cd ../backend
+npm install --production
+pm2 restart fintrack-api
 ```
 
 ---
 
-## Comandos útiles del día a día
+## Comandos útiles
 
 ```bash
-# Ver estado del backend
-docker compose -f docker-compose.prod.yml ps
+# Estado del backend
+pm2 status
 
-# Ver logs en tiempo real
-docker compose -f docker-compose.prod.yml logs -f backend
+# Logs en tiempo real
+pm2 logs fintrack-api
 
-# Reiniciar el backend
-docker compose -f docker-compose.prod.yml restart backend
+# Reiniciar backend
+pm2 restart fintrack-api
 
-# Consola de MySQL
+# Consola MySQL
 mysql -u fintrack_user -p fintrack
 
-# Backup de la base de datos
-mysqldump -u fintrack_user -p fintrack > backup_$(date +%Y%m%d).sql
+# Backup
+mysqldump -u fintrack_user -p'TuPassword' fintrack > backup_$(date +%Y%m%d).sql
 
 # Restaurar backup
-mysql -u fintrack_user -p fintrack < backup_20260101.sql
+mysql -u fintrack_user -p'TuPassword' fintrack < backup_20260101.sql
 ```
 
 ---
 
-## Arquitectura final
-
-```
-Usuario
-  │
-  ├─► Vercel  (frontend React/Vite)
-  │     └─► /api/*  ──rewrite──►  https://api.tudominio.com
-  │
-  └─► Servidor Ubuntu 22.04
-        ├─► Nginx      (SSL, puerto 443)  →  localhost:4000
-        ├─► Docker     (backend Node.js,  puerto 4000)
-        └─► MySQL 8.0  (nativo, puerto 3306 local)
-```
+> Cuando tengas dominio: instala Certbot, agrega `server_name tudominio.com` en el nginx config
+> y ejecuta `sudo certbot --nginx -d tudominio.com`. Actualiza `FRONTEND_URL` en el `.env` y reinicia pm2.

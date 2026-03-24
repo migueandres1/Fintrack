@@ -4,15 +4,23 @@ node_modules/
 .pnp.js
 
 # ── Variables de entorno ───────────────────────────────────────
+# .env.example SÍ se commitea (plantilla sin secretos)
 .env
 .env.local
 .env.*.local
 .env.production
+backend/.env
 
 # ── Build outputs ─────────────────────────────────────────────
 frontend/dist/
 frontend/.vite/
 backend/dist/
+
+# ── Docker ────────────────────────────────────────────────────
+# docker-compose.yml se commitea (desarrollo local)
+# docker-compose.prod.yml NO — se crea en el servidor
+docker-compose.prod.yml
+db_data/
 
 # ── Logs ──────────────────────────────────────────────────────
 logs/
@@ -21,9 +29,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-
-# ── Docker volumes locales ─────────────────────────────────────
-db_data/
 
 # ── OS ────────────────────────────────────────────────────────
 .DS_Store
@@ -41,10 +46,8 @@ desktop.ini
 *.sln
 *.sw?
 
-# ── Vercel ────────────────────────────────────────────────────
-.vercel/
-
 # ── Misc ──────────────────────────────────────────────────────
+.vercel/
 *.local
 coverage/
 .nyc_output/
