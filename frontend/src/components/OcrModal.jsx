@@ -1,4 +1,28 @@
 import { useRef, useState } from 'react';
+
+// Comprime imágenes grandes antes de subir (fotos de cámara móvil ~6MB → ~400KB)
+async function compressImage(file, maxPx = 1920, quality = 0.82) {
+  if (!file.type.startsWith('image/') || file.size < 1.2 * 1024 * 1024) return file;
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const ratio = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width  * ratio);
+      const h = Math.round(img.height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        (blob) => resolve(new File([blob], 'receipt.jpg', { type: 'image/jpeg' })),
+        'image/jpeg', quality
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
 import { ScanLine, Upload, X, CheckCircle, AlertCircle, Loader2, ImageIcon, Banknote, CreditCard } from 'lucide-react';
 import { Modal } from './ui/index.jsx';
 import { fmt }   from '../utils/format.js';
@@ -62,10 +86,12 @@ export default function OcrModal({ open, onClose, onConfirm, categories = [], cr
     if (!file) return;
     setLoading(true); setError(null); setResult(null);
     const form = new FormData();
-    form.append('receipt', file);
+    const uploadFile = await compressImage(file);
+    form.append('receipt', uploadFile);
     try {
       const { data } = await api.post('/ocr/receipt', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000, // 60s — conexiones móviles lentas
       });
       setResult(data);
       // Sugerir categoría "Alimentación" si parece supermercado, etc.
@@ -136,7 +162,7 @@ export default function OcrModal({ open, onClose, onConfirm, categories = [], cr
               ref={inputRef}
               type="file"
               className="hidden"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+              accept="image/*,application/pdf"
               onChange={e => loadFile(e.target.files[0])}
             />
 
