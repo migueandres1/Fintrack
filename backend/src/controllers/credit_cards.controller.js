@@ -21,16 +21,30 @@ export async function list(req, res) {
       [ids]
     );
 
-    const balanceMap = {};
-    txns.forEach(t => {
-      balanceMap[t.credit_card_id] = +((Number(t.purchases) || 0) - (Number(t.payments) || 0)).toFixed(2);
-    });
+    // Saldo bloqueado por deudas enlazadas (compras a meses sin intereses)
+    const [linkedDebts] = await pool.query(
+      `SELECT credit_card_id, SUM(current_balance) AS debt_total
+       FROM debts
+       WHERE credit_card_id IN (?) AND is_active = 1
+       GROUP BY credit_card_id`,
+      [ids]
+    );
 
-    res.json(cards.map(c => ({
-      ...c,
-      current_balance: balanceMap[c.id] || 0,
-      utilization: c.credit_limit > 0 ? +(((balanceMap[c.id] || 0) / Number(c.credit_limit)) * 100).toFixed(1) : 0,
-    })));
+    const txnMap = {};
+    txns.forEach(t => {
+      txnMap[t.credit_card_id] = +((Number(t.purchases) || 0) - (Number(t.payments) || 0)).toFixed(2);
+    });
+    const debtMap = {};
+    linkedDebts.forEach(d => { debtMap[d.credit_card_id] = Number(d.debt_total) || 0; });
+
+    res.json(cards.map(c => {
+      const current_balance = +((txnMap[c.id] || 0) + (debtMap[c.id] || 0)).toFixed(2);
+      return {
+        ...c,
+        current_balance,
+        utilization: c.credit_limit > 0 ? +((current_balance / Number(c.credit_limit)) * 100).toFixed(1) : 0,
+      };
+    }));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });

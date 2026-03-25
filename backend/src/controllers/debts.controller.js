@@ -4,7 +4,10 @@ import { calcPayoffProjection } from '../utils/amortization.js';
 export async function list(req, res) {
   try {
     const [debts] = await pool.query(
-      'SELECT * FROM debts WHERE user_id = ? ORDER BY created_at DESC',
+      `SELECT d.*, cc.name AS card_name, cc.last_four AS card_last_four
+       FROM debts d
+       LEFT JOIN credit_cards cc ON cc.id = d.credit_card_id
+       WHERE d.user_id = ? ORDER BY d.created_at DESC`,
       [req.userId]
     );
 
@@ -42,7 +45,10 @@ export async function getOne(req, res) {
   const { id } = req.params;
   try {
     const [[debt]] = await pool.query(
-      'SELECT * FROM debts WHERE id = ? AND user_id = ?', [id, req.userId]
+      `SELECT d.*, cc.name AS card_name, cc.last_four AS card_last_four
+       FROM debts d
+       LEFT JOIN credit_cards cc ON cc.id = d.credit_card_id
+       WHERE d.id = ? AND d.user_id = ?`, [id, req.userId]
     );
     if (!debt) return res.status(404).json({ error: 'No encontrado' });
 
@@ -105,30 +111,36 @@ export async function removePlanned(req, res) {
 }
 
 export async function create(req, res) {
-const { name, initial_balance, annual_rate, monthly_payment, payment_day = 1, start_date, notes } = req.body;  try {
+  const { name, initial_balance, annual_rate, monthly_payment, payment_day = 1, start_date, notes, credit_card_id } = req.body;
+  try {
     const [result] = await pool.query(
-`INSERT INTO debts
-   (user_id, name, initial_balance, current_balance, annual_rate, monthly_payment, payment_day, start_date, notes)
- VALUES (?,?,?,?,?,?,?,?,?)`,
-[req.userId, name, initial_balance, initial_balance, annual_rate, monthly_payment, payment_day, start_date, notes]
+      `INSERT INTO debts
+         (user_id, credit_card_id, name, initial_balance, current_balance, annual_rate, monthly_payment, payment_day, start_date, notes)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [req.userId, credit_card_id || null, name, initial_balance, initial_balance, annual_rate, monthly_payment, payment_day, start_date, notes]
     );
-    const [[debt]] = await pool.query('SELECT * FROM debts WHERE id = ?', [result.insertId]);
+    const [[debt]] = await pool.query(
+      `SELECT d.*, cc.name AS card_name, cc.last_four AS card_last_four
+       FROM debts d LEFT JOIN credit_cards cc ON cc.id = d.credit_card_id
+       WHERE d.id = ?`, [result.insertId]
+    );
     res.status(201).json({ ...debt, projection: calcPayoffProjection(debt.current_balance, debt.annual_rate, debt.monthly_payment, debt.payment_day) });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Error interno' });
   }
 }
 
 export async function update(req, res) {
   const { id } = req.params;
-const { name, annual_rate, monthly_payment, payment_day, notes } = req.body;
+  const { name, annual_rate, monthly_payment, payment_day, notes, credit_card_id } = req.body;
   try {
     const [[check]] = await pool.query('SELECT id FROM debts WHERE id=? AND user_id=?', [id, req.userId]);
     if (!check) return res.status(404).json({ error: 'No encontrado' });
 
     await pool.query(
-      'UPDATE debts SET name=?, annual_rate=?, monthly_payment=?, payment_day=?, notes=? WHERE id=?',
-      [name, annual_rate, monthly_payment, payment_day, notes, id]
+      'UPDATE debts SET name=?, annual_rate=?, monthly_payment=?, payment_day=?, notes=?, credit_card_id=? WHERE id=?',
+      [name, annual_rate, monthly_payment, payment_day, notes, credit_card_id || null, id]
     );
     res.json({ success: true });
   } catch (err) {

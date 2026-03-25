@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, PiggyBank, Target, CheckCircle2 } from 'lucide-react';
 import { useStore }  from '../store/index.js';
-import { fmt }       from '../utils/format.js';
+import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
 import api           from '../services/api.js';
 import clsx          from 'clsx';
@@ -13,7 +13,7 @@ const EMPTY_GOAL = {
   name: '', target_amount: '', deadline: '', icon: 'piggy-bank', color: '#6366f1',
 };
 const EMPTY_CONTRIB = {
-  amount: '', contrib_date: new Date().toISOString().split('T')[0], notes: '',
+  amount: '', contrib_date: localDate(), notes: '',
 };
 
 function GoalCard({ goal, currency, onEdit, onDelete, onContrib }) {

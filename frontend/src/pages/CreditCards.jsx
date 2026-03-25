@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
 import { useStore } from '../store/index.js';
-import { fmt }      from '../utils/format.js';
+import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
 import api   from '../services/api.js';
 import clsx  from 'clsx';
@@ -13,7 +13,7 @@ const EMPTY_CARD = {
   color: '#6366f1', notes: '',
 };
 const EMPTY_PAY = {
-  amount: '', txn_date: new Date().toISOString().split('T')[0], notes: '',
+  amount: '', txn_date: localDate(), notes: '',
 };
 
 function CardItem({ card, currency, onEdit, onDelete, onPay }) {
@@ -44,7 +44,7 @@ function CardItem({ card, currency, onEdit, onDelete, onPay }) {
     const ny = nm > 11 ? today.getFullYear() + 1 : today.getFullYear();
     nextDue  = new Date(ny, nm % 12, clampDay(ny, nm % 12));
   }
-  const nextDueStr = nextDue.toISOString().split('T')[0];
+  const nextDueStr = localDate(nextDue);
 
   return (
     <div className="card transition-all">

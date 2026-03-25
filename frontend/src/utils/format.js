@@ -1,6 +1,12 @@
 import { format, parseISO, formatDistanceToNow, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+// Fecha local como YYYY-MM-DD (evita el desfase UTC de toISOString)
+export const localDate = (d = new Date()) => {
+  const dt = d instanceof Date ? d : new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+};
+
 export const fmt = {
   currency: (n, currency = 'USD') =>
     new Intl.NumberFormat('es-SV', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n ?? 0),
@@ -8,7 +14,10 @@ export const fmt = {
   pct: (n) => `${(n * 100).toFixed(2)}%`,
 
   date: (d) => {
-    try { return format(typeof d === 'string' ? parseISO(d) : d, 'dd MMM yyyy', { locale: es }); }
+    try {
+      const s = typeof d === 'string' ? d.split('T')[0] : d;
+      return format(typeof s === 'string' ? parseISO(s) : s, 'dd MMM yyyy', { locale: es });
+    }
     catch { return d; }
   },
 
@@ -19,12 +28,18 @@ export const fmt = {
   },
 
   relative: (d) => {
-    try { return formatDistanceToNow(typeof d === 'string' ? parseISO(d) : d, { locale: es, addSuffix: true }); }
+    try {
+      const s = typeof d === 'string' ? d.split('T')[0] : d;
+      return formatDistanceToNow(typeof s === 'string' ? parseISO(s) : s, { locale: es, addSuffix: true });
+    }
     catch { return d; }
   },
 
   daysUntil: (d) => {
-    try { return differenceInDays(typeof d === 'string' ? parseISO(d) : d, new Date()); }
+    try {
+      const s = typeof d === 'string' ? d.split('T')[0] : d;
+      return differenceInDays(typeof s === 'string' ? parseISO(s) : s, new Date());
+    }
     catch { return null; }
   },
 

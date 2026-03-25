@@ -55,6 +55,7 @@ INSERT INTO categories (user_id, name, type, icon, color) VALUES
 CREATE TABLE debts (
   id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id          INT UNSIGNED  NOT NULL,
+  credit_card_id   INT UNSIGNED  NULL,
   name             VARCHAR(120)  NOT NULL,
   initial_balance  DECIMAL(14,2) NOT NULL CHECK (initial_balance > 0),
   current_balance  DECIMAL(14,2) NOT NULL,
@@ -67,7 +68,9 @@ CREATE TABLE debts (
   created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_debt_user (user_id)
+  FOREIGN KEY (credit_card_id) REFERENCES credit_cards(id) ON DELETE SET NULL,
+  INDEX idx_debt_user (user_id),
+  INDEX idx_debt_card (credit_card_id)
 );
 
 -- ------------------------------------------------------------

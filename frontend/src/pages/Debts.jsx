@@ -2,18 +2,17 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, CalendarPlus, X } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useStore } from '../store/index.js';
-import { fmt } from '../utils/format.js';
+import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
 
 const EMPTY_DEBT = {
   name: '', initial_balance: '', annual_rate: '', monthly_payment: '',
-  payment_day: 1,
-  start_date: new Date().toISOString().split('T')[0], notes: '',
+  payment_day: 1, start_date: localDate(), notes: '', credit_card_id: '',
 };
 const EMPTY_PAY = {
-  payment_date: new Date().toISOString().split('T')[0],
+  payment_date: localDate(),
   total_amount: '', extra_principal: '0', notes: '',
 };
 
@@ -113,6 +112,11 @@ function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
             <p className="text-xs text-[var(--text-muted)]">
               {fmt.pct(debt.annual_rate)} anual · Vence día {debt.payment_day}
             </p>
+            {debt.card_name && (
+              <span className="inline-flex items-center gap-1 mt-1 text-xs text-brand-400 bg-brand-500/10 px-1.5 py-0.5 rounded-md">
+                <CreditCard size={11} /> {debt.card_name} ••{debt.card_last_four}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex gap-1">
@@ -227,7 +231,7 @@ function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
                     <label className="label">Fecha</label>
                     <input className="input" type="date" required
                       value={plannedForm.planned_date}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={localDate()}
                       onChange={e => setPlannedForm({ ...plannedForm, planned_date: e.target.value })} />
                   </div>
                   <div>
@@ -314,7 +318,7 @@ function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
 }
 
 export default function Debts() {
-  const { debts, debtsLoading, fetchDebts, createDebt, updateDebt, deleteDebt, addDebtPayment, user } = useStore();
+  const { debts, debtsLoading, fetchDebts, createDebt, updateDebt, deleteDebt, addDebtPayment, user, creditCards, fetchCreditCards } = useStore();
   const currency = user?.currency || 'USD';
 
   const [modal, setModal] = useState(false);
@@ -326,7 +330,7 @@ export default function Debts() {
   const [payForm, setPayForm] = useState(EMPTY_PAY);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { fetchDebts(); }, []);
+  useEffect(() => { fetchDebts(); fetchCreditCards(); }, []);
 
   const openCreate = () => { setEditing(null); setForm(EMPTY_DEBT); setModal(true); };
 
@@ -340,6 +344,7 @@ export default function Debts() {
       payment_day: d.payment_day || 1,
       start_date: d.start_date,
       notes: d.notes || '',
+      credit_card_id: d.credit_card_id || '',
     });
     setModal(true);
   };
@@ -457,6 +462,21 @@ export default function Debts() {
             <label className="label">Fecha de inicio</label>
             <input className="input" type="date" value={form.start_date}
               onChange={e => setForm({ ...form, start_date: e.target.value })} required />
+          </div>
+
+          <div>
+            <label className="label">Tarjeta de crédito enlazada (opcional)</label>
+            <select className="input" value={form.credit_card_id} onChange={e => setForm({ ...form, credit_card_id: e.target.value })}>
+              <option value="">Sin tarjeta</option>
+              {creditCards.map(c => (
+                <option key={c.id} value={c.id}>{c.name} ••{c.last_four}</option>
+              ))}
+            </select>
+            {form.credit_card_id && (
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                El saldo pendiente de esta deuda reducirá el crédito disponible de la tarjeta.
+              </p>
+            )}
           </div>
 
           <div>

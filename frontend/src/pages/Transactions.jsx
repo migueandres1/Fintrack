@@ -2,20 +2,20 @@ import { useEffect, useState } from 'react';
 import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, PiggyBank, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useStore } from '../store/index.js';
-import { fmt } from '../utils/format.js';
+import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, Spinner, Empty, ProgressBar } from '../components/ui/index.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
 
 const EMPTY_FORM = {
   type: 'expense', category_id: '', amount: '', description: '',
-  txn_date: new Date().toISOString().split('T')[0],
+  txn_date: localDate(),
   debt_id: '', savings_goal_id: '', credit_card_id: '', extra_principal: '0',
 };
 
 const EMPTY_REC = {
   type: 'expense', category_id: '', amount: '', description: '',
-  frequency: 'monthly', start_date: new Date().toISOString().split('T')[0],
+  frequency: 'monthly', start_date: localDate(),
   end_date: '', savings_goal_id: '', credit_card_id: '',
 };
 
@@ -75,7 +75,7 @@ export default function Transactions() {
     setEditing(t);
     setForm({
       type: t.type, category_id: t.category_id, amount: t.amount,
-      description: t.description || '', txn_date: t.txn_date,
+      description: t.description || '', txn_date: String(t.txn_date).split('T')[0],
       debt_id: t.debt_id || '', savings_goal_id: t.savings_goal_id || '',
       credit_card_id: t.credit_card_id || '', extra_principal: t.extra_principal || '0',
     });
