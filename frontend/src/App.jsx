@@ -12,6 +12,8 @@ import Planning     from './pages/Planning.jsx';
 import CreditCards  from './pages/CreditCards.jsx';
 import Onboarding   from './pages/Onboarding.jsx';
 import Profile      from './pages/Profile.jsx';
+import Budget       from './pages/Budget.jsx';
+import Accounts     from './pages/Accounts.jsx';
 
 function RequireAuth({ children }) {
   const token = useStore((s) => s.token);
@@ -52,6 +54,8 @@ export default function App() {
         <Route path="savings" element={<Savings />} />
         <Route path="planning"      element={<Planning />} />
         <Route path="credit-cards"  element={<CreditCards />} />
+        <Route path="budget"        element={<Budget />} />
+        <Route path="accounts"      element={<Accounts />} />
         <Route path="profile"       element={<Profile />} />
       </Route>
       <Route path="/onboarding" element={<RequireOnboarding><Onboarding /></RequireOnboarding>} />

@@ -47,7 +47,8 @@ INSERT INTO categories (user_id, name, type, icon, color) VALUES
   (NULL, 'Ropa',            'expense', 'shirt',          '#a855f7'),
   (NULL, 'Servicios',       'expense', 'zap',            '#14b8a6'),
   (NULL, 'Otros gastos',    'expense', 'more-horizontal','#6b7280'),
-  (NULL, 'Ahorro',          'expense', 'piggy-bank',     '#10b981');
+  (NULL, 'Ahorro',          'expense', 'piggy-bank',     '#10b981'),
+  (NULL, 'Remesas',         'income',  'send',           '#f59e0b');
 
 -- ------------------------------------------------------------
 -- DEUDAS
@@ -111,8 +112,27 @@ CREATE TABLE credit_cards (
 );
 
 -- ------------------------------------------------------------
+-- CUENTAS BANCARIAS
+-- ------------------------------------------------------------
+CREATE TABLE bank_accounts (
+  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id         INT UNSIGNED  NOT NULL,
+  name            VARCHAR(120)  NOT NULL,
+  type            ENUM('checking','savings','cash','investment') NOT NULL DEFAULT 'checking',
+  initial_balance DECIMAL(14,2) NOT NULL DEFAULT 0,
+  currency        CHAR(3)       NOT NULL DEFAULT 'USD',
+  color           CHAR(7)       NOT NULL DEFAULT '#6366f1',
+  notes           VARCHAR(255),
+  is_active       TINYINT(1)    NOT NULL DEFAULT 1,
+  created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_account_user (user_id)
+);
+
+-- ------------------------------------------------------------
 -- TRANSACCIONES
--- (después de debts, savings_goals y credit_cards)
+-- (después de debts, savings_goals, credit_cards y bank_accounts)
 -- ------------------------------------------------------------
 CREATE TABLE transactions (
   id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -125,16 +145,19 @@ CREATE TABLE transactions (
   debt_id         INT UNSIGNED  NULL COMMENT 'Vinculada a deuda',
   savings_goal_id INT UNSIGNED  NULL COMMENT 'Vinculada a meta de ahorro',
   credit_card_id  INT UNSIGNED  NULL COMMENT 'Cargado a tarjeta de crédito',
+  account_id      INT UNSIGNED  NULL COMMENT 'Cuenta bancaria origen/destino',
   is_card_payment TINYINT(1)    NOT NULL DEFAULT 0 COMMENT '1 = pago de saldo de tarjeta',
   extra_principal DECIMAL(14,2) NOT NULL DEFAULT 0 COMMENT 'Abono extra a capital (solo deudas)',
   created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id)         REFERENCES users(id)         ON DELETE CASCADE,
-  FOREIGN KEY (category_id)     REFERENCES categories(id)    ON DELETE RESTRICT,
-  FOREIGN KEY (debt_id)         REFERENCES debts(id)         ON DELETE SET NULL,
-  FOREIGN KEY (savings_goal_id) REFERENCES savings_goals(id) ON DELETE SET NULL,
-  FOREIGN KEY (credit_card_id)  REFERENCES credit_cards(id)  ON DELETE SET NULL,
+  FOREIGN KEY (user_id)         REFERENCES users(id)          ON DELETE CASCADE,
+  FOREIGN KEY (category_id)     REFERENCES categories(id)     ON DELETE RESTRICT,
+  FOREIGN KEY (debt_id)         REFERENCES debts(id)          ON DELETE SET NULL,
+  FOREIGN KEY (savings_goal_id) REFERENCES savings_goals(id)  ON DELETE SET NULL,
+  FOREIGN KEY (credit_card_id)  REFERENCES credit_cards(id)   ON DELETE SET NULL,
+  FOREIGN KEY (account_id)      REFERENCES bank_accounts(id)  ON DELETE SET NULL,
   INDEX idx_txn_user_date (user_id, txn_date),
-  INDEX idx_txn_type      (type)
+  INDEX idx_txn_type      (type),
+  INDEX idx_txn_account   (account_id)
 );
 
 -- ------------------------------------------------------------
@@ -216,6 +239,22 @@ CREATE TABLE debt_planned_payments (
   FOREIGN KEY (debt_id) REFERENCES debts(id) ON DELETE CASCADE,
   INDEX idx_planned_debt (debt_id),
   INDEX idx_planned_date (planned_date)
+);
+
+-- ------------------------------------------------------------
+-- PRESUPUESTOS
+-- ------------------------------------------------------------
+CREATE TABLE budgets (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id     INT UNSIGNED  NOT NULL,
+  category_id INT UNSIGNED  NOT NULL,
+  amount      DECIMAL(14,2) NOT NULL CHECK (amount > 0),
+  month       CHAR(7)       NOT NULL COMMENT 'YYYY-MM',
+  created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_budget_user_cat_month (user_id, category_id, month),
+  FOREIGN KEY (user_id)     REFERENCES users(id)      ON DELETE CASCADE,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 );
 
 -- ============================================================

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
+import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, DollarSign, Calculator } from 'lucide-react';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
@@ -15,6 +15,84 @@ const EMPTY_CARD = {
 const EMPTY_PAY = {
   amount: '', txn_date: localDate(), notes: '',
 };
+
+// Simulates months to pay off and total interest given a fixed monthly payment
+function simulatePayoff(balance, monthlyRate, payment) {
+  if (balance <= 0 || payment <= 0) return { months: 0, totalInterest: 0 };
+  if (monthlyRate <= 0) return { months: Math.ceil(balance / payment), totalInterest: 0 };
+  let bal = balance, interest = 0, months = 0;
+  while (bal > 0.005 && months < 600) {
+    const int = bal * monthlyRate;
+    interest += int;
+    bal = bal + int - payment;
+    months++;
+    if (payment <= bal * monthlyRate + 0.01) { months = 600; break; } // payment too small
+  }
+  return { months, totalInterest: +interest.toFixed(2) };
+}
+
+function MinPaySimulator({ balance, currency }) {
+  const [rate, setRate] = useState(24);
+  const [open, setOpen] = useState(false);
+  if (balance <= 0) return null;
+  const r = (rate / 100) / 12;
+  const minPay = Math.max(balance * 0.02, 10);
+  const minSim = simulatePayoff(balance, r, minPay);
+  const totalSim = simulatePayoff(balance, r, balance); // pay off in 1 month
+  return (
+    <div className="mt-3 border-t border-[var(--border)] pt-3">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors w-full"
+      >
+        <Calculator size={13} />
+        {open ? 'Ocultar simulador' : 'Simulador: mínimo vs total'}
+        {open ? <ChevronUp size={12} className="ml-auto" /> : <ChevronDown size={12} className="ml-auto" />}
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3 animate-fade-up">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[var(--text-muted)] flex-shrink-0">Tasa anual:</label>
+            <input
+              type="number" min="1" max="200" step="0.5"
+              value={rate}
+              onChange={e => setRate(Number(e.target.value) || 24)}
+              className="input !py-1 !text-xs w-20"
+            />
+            <span className="text-xs text-[var(--text-muted)]">%</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800">
+              <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mb-1.5">Solo mínimo</p>
+              <p className="text-xs text-[var(--text-muted)]">Pago mensual</p>
+              <p className="font-bold text-sm text-mono text-rose-500">{fmt.currency(minPay, currency)}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Meses</p>
+              <p className="font-semibold text-sm">{minSim.months >= 600 ? '∞' : minSim.months}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Intereses totales</p>
+              <p className="font-bold text-sm text-mono text-rose-500">
+                {minSim.months >= 600 ? '∞' : fmt.currency(minSim.totalInterest, currency)}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
+              <p className="text-[10px] font-semibold text-green-600 dark:text-green-400 mb-1.5">Pago total</p>
+              <p className="text-xs text-[var(--text-muted)]">Pago mensual</p>
+              <p className="font-bold text-sm text-mono text-green-500">{fmt.currency(balance, currency)}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Meses</p>
+              <p className="font-semibold text-sm">1</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Intereses totales</p>
+              <p className="font-bold text-sm text-mono text-green-500">{fmt.currency(0, currency)}</p>
+            </div>
+          </div>
+          {minSim.months < 600 && minSim.totalInterest > 0 && (
+            <p className="text-[10px] text-[var(--text-muted)] text-center">
+              Pagando solo el mínimo gastarías <strong className="text-rose-500">{fmt.currency(minSim.totalInterest, currency)}</strong> extra en intereses.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CardItem({ card, currency, onEdit, onDelete, onPay }) {
   const [expanded, setExpanded]   = useState(false);
@@ -106,8 +184,10 @@ function CardItem({ card, currency, onEdit, onDelete, onPay }) {
         </div>
       )}
 
+      <MinPaySimulator balance={card.current_balance} currency={currency} />
+
       <button onClick={loadTxns} disabled={loading}
-        className="w-full flex items-center justify-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] py-1 transition-colors">
+        className="mt-3 w-full flex items-center justify-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] py-1 transition-colors">
         {loading ? 'Cargando...' : expanded
           ? <><ChevronUp size={14} /> Ocultar movimientos</>
           : <><ChevronDown size={14} /> Ver movimientos recientes</>}

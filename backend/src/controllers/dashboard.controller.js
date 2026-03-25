@@ -69,6 +69,42 @@ export async function getDashboard(req, res) {
        WHERE t.user_id=? ORDER BY t.txn_date DESC LIMIT 5`, [uid]
     );
 
+    // ── Score financiero (0–100 pts, 4 dimensiones × 25 pts) ────────
+    const mIncome   = +(thisMonth.income   || 0);
+    const mExpenses = +(thisMonth.expenses || 0);
+    const balTotal  = +((balance.total_income || 0) - (balance.total_expenses || 0)).toFixed(2);
+
+    // 1. Liquidez: meses de gastos cubiertos por balance (3 meses = 25 pts)
+    const scoreLiquidez = mExpenses > 0
+      ? Math.min(25, (balTotal / mExpenses) * (25 / 3))
+      : (balTotal > 0 ? 25 : 0);
+
+    // 2. Tasa de ahorro: (income − expenses) / income (20 % = 25 pts)
+    const savingRate = mIncome > 0 ? Math.max(0, (mIncome - mExpenses) / mIncome) : 0;
+    const scoreAhorro = Math.min(25, (savingRate / 0.20) * 25);
+
+    // 3. Nivel de deuda: cuotas / ingresos (0 % = 25 pts, 35 %+ = 0 pts)
+    const monthlyDebtPmts = debts.reduce((s, d) => s + Number(d.monthly_payment), 0);
+    const debtRatio = mIncome > 0 ? monthlyDebtPmts / mIncome : (monthlyDebtPmts > 0 ? 1 : 0);
+    const scoreDeuda = Math.max(0, 25 - (debtRatio / 0.35) * 25);
+
+    // 4. Progreso de metas: promedio % completado (100 % = 25 pts)
+    const activeGoalsList = goals.filter(g => !g.is_completed);
+    const goalsProgress = activeGoalsList.length > 0
+      ? activeGoalsList.reduce((s, g) => s + Math.min(1, Number(g.current_amount) / Math.max(1, Number(g.target_amount))), 0) / activeGoalsList.length
+      : goals.length > 0 ? 1 : 0;
+    const scoreMetas = Math.min(25, goalsProgress * 25);
+
+    const score = {
+      total: Math.max(0, Math.min(100, Math.round(scoreLiquidez + scoreAhorro + scoreDeuda + scoreMetas))),
+      dimensions: {
+        liquidez: Math.max(0, Math.round(scoreLiquidez)),
+        ahorro:   Math.max(0, Math.round(scoreAhorro)),
+        deuda:    Math.max(0, Math.round(scoreDeuda)),
+        metas:    Math.max(0, Math.round(scoreMetas)),
+      },
+    };
+
     res.json({
       balance: {
         total:          +((balance.total_income || 0) - (balance.total_expenses || 0)).toFixed(2),
@@ -84,6 +120,7 @@ export async function getDashboard(req, res) {
       total_debt:     +totalDebt.toFixed(2),
       goals,
       recent_transactions: recent,
+      score,
     });
   } catch (err) {
     console.error(err);

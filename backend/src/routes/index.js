@@ -1,4 +1,5 @@
 import { Router }        from 'express';
+import multer            from 'multer';
 import { authenticate }  from '../middleware/auth.js';
 import * as auth         from '../controllers/auth.controller.js';
 import * as txn          from '../controllers/transactions.controller.js';
@@ -7,6 +8,19 @@ import * as savings      from '../controllers/savings.controller.js';
 import * as dash         from '../controllers/dashboard.controller.js';
 import * as recurring    from '../controllers/recurring.controller.js';
 import * as cards        from '../controllers/credit_cards.controller.js';
+import * as budgets      from '../controllers/budgets.controller.js';
+import * as accounts     from '../controllers/accounts.controller.js';
+import * as ocr          from '../controllers/ocr.controller.js';
+
+// Multer: memoria, solo imágenes y PDF, máx 10 MB
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 const r = Router();
 
@@ -62,5 +76,21 @@ r.put   ('/credit-cards/:id',               authenticate, cards.update);
 r.delete('/credit-cards/:id',               authenticate, cards.remove);
 r.get   ('/credit-cards/:id/transactions',  authenticate, cards.getTransactions);
 r.post  ('/credit-cards/:id/payments',      authenticate, cards.addPayment);
+
+// OCR – Expense parser
+r.post('/ocr/receipt', authenticate, upload.single('receipt'), ocr.processReceipt);
+
+// Bank accounts
+r.get   ('/accounts',                      authenticate, accounts.list);
+r.post  ('/accounts',                      authenticate, accounts.create);
+r.put   ('/accounts/:id',                  authenticate, accounts.update);
+r.delete('/accounts/:id',                  authenticate, accounts.remove);
+r.get   ('/accounts/:id/transactions',     authenticate, accounts.getTransactions);
+
+// Budgets
+r.get   ('/budgets',                    authenticate, budgets.list);
+r.put   ('/budgets',                    authenticate, budgets.upsert);
+r.delete('/budgets/:categoryId',        authenticate, budgets.remove);
+r.post  ('/budgets/copy',               authenticate, budgets.copyFromLastMonth);
 
 export default r;

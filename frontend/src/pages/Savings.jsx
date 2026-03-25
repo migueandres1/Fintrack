@@ -95,13 +95,24 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib }) {
         </div>
       </div>
 
-      {/* Projection */}
+      {/* Projection: semanal / quincenal / mensual */}
       {!goal.is_completed && neededPerMonth && (
-        <div className="flex items-center justify-between p-2.5 rounded-lg bg-surface-50 dark:bg-surface-800 text-xs">
-          <span className="text-[var(--text-muted)]">Necesitas ahorrar por mes:</span>
-          <span className="font-semibold text-mono" style={{ color: goal.color }}>
-            {fmt.currency(neededPerMonth, currency)}
-          </span>
+        <div className="p-2.5 rounded-lg bg-surface-50 dark:bg-surface-800 text-xs">
+          <p className="text-[var(--text-muted)] mb-2">Ahorro necesario para llegar a tiempo:</p>
+          <div className="grid grid-cols-3 gap-1 text-center">
+            {[
+              { label: 'Semanal',    value: (neededPerMonth / 4.33).toFixed(2) },
+              { label: 'Quincenal', value: (neededPerMonth / 2).toFixed(2) },
+              { label: 'Mensual',   value: neededPerMonth },
+            ].map(({ label, value }) => (
+              <div key={label} className="p-1.5 rounded-lg bg-[var(--bg)]">
+                <p className="text-[10px] text-[var(--text-muted)]">{label}</p>
+                <p className="font-semibold text-mono" style={{ color: goal.color }}>
+                  {fmt.currency(value, currency)}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

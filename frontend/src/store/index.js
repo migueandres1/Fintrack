@@ -229,6 +229,59 @@ export const useStore = create(
       deleteRecurring: async (id) => {
         await api.delete(`/recurring/${id}`);
       },
+
+      // ── Bank Accounts ─────────────────────────────────
+      accounts:        [],
+      accountsLoading: false,
+
+      fetchAccounts: async () => {
+        set({ accountsLoading: true });
+        try {
+          const { data } = await api.get('/accounts');
+          set({ accounts: data });
+        } finally {
+          set({ accountsLoading: false });
+        }
+      },
+
+      createAccount: async (payload) => {
+        const { data } = await api.post('/accounts', payload);
+        return data;
+      },
+
+      updateAccount: async (id, payload) => {
+        await api.put(`/accounts/${id}`, payload);
+      },
+
+      deleteAccount: async (id) => {
+        await api.delete(`/accounts/${id}`);
+      },
+
+      // ── Budgets ───────────────────────────────────────
+      budgets:        { month: '', items: [], categories: [] },
+      budgetsLoading: false,
+
+      fetchBudgets: async (month) => {
+        set({ budgetsLoading: true });
+        try {
+          const { data } = await api.get('/budgets', { params: { month } });
+          set({ budgets: data });
+        } finally {
+          set({ budgetsLoading: false });
+        }
+      },
+
+      saveBudget: async (payload) => {
+        await api.put('/budgets', payload);
+      },
+
+      deleteBudget: async (categoryId, month) => {
+        await api.delete(`/budgets/${categoryId}`, { params: { month } });
+      },
+
+      copyBudgetsFromLastMonth: async (targetMonth) => {
+        await api.post('/budgets/copy', { targetMonth });
+      },
     }),
     {
       name:    'fintrack-store',

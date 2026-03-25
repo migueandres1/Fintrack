@@ -113,13 +113,14 @@ async function reverseEffects(conn, txnId, { debt_id, savings_goal_id }) {
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 export async function list(req, res) {
-  const { type, category_id, from, to, page = 1, limit = 50 } = req.query;
+  const { type, category_id, account_id, from, to, page = 1, limit = 50 } = req.query;
   const offset = (page - 1) * limit;
   const params = [req.userId];
   let where = 'WHERE t.user_id = ?';
 
   if (type)        { where += ' AND t.type = ?';        params.push(type); }
   if (category_id) { where += ' AND t.category_id = ?'; params.push(category_id); }
+  if (account_id)  { where += ' AND t.account_id = ?';  params.push(account_id); }
   if (from)        { where += ' AND t.txn_date >= ?';   params.push(from); }
   if (to)          { where += ' AND t.txn_date <= ?';   params.push(to); }
 
@@ -145,7 +146,7 @@ export async function list(req, res) {
 
 export async function create(req, res) {
   const { category_id, type, amount, description, txn_date,
-          debt_id, savings_goal_id, credit_card_id, extra_principal = 0 } = req.body;
+          debt_id, savings_goal_id, credit_card_id, account_id, extra_principal = 0 } = req.body;
 
   const conn = await pool.getConnection();
   try {
@@ -154,11 +155,11 @@ export async function create(req, res) {
     const [result] = await conn.query(
       `INSERT INTO transactions
          (user_id, category_id, type, amount, description, txn_date,
-          debt_id, savings_goal_id, credit_card_id, extra_principal)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          debt_id, savings_goal_id, credit_card_id, account_id, extra_principal)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [req.userId, category_id, type, amount, description, txn_date,
        debt_id || null, savings_goal_id || null, credit_card_id || null,
-       Number(extra_principal) || 0]
+       account_id || null, Number(extra_principal) || 0]
     );
     const txnId = result.insertId;
 
@@ -191,7 +192,7 @@ export async function create(req, res) {
 export async function update(req, res) {
   const { id } = req.params;
   const { category_id, type, amount, description, txn_date,
-          debt_id, savings_goal_id, credit_card_id, extra_principal } = req.body;
+          debt_id, savings_goal_id, credit_card_id, account_id, extra_principal } = req.body;
 
   const conn = await pool.getConnection();
   try {
@@ -216,11 +217,11 @@ export async function update(req, res) {
     await conn.query(
       `UPDATE transactions
        SET category_id=?, type=?, amount=?, description=?, txn_date=?,
-           debt_id=?, savings_goal_id=?, credit_card_id=?, extra_principal=?
+           debt_id=?, savings_goal_id=?, credit_card_id=?, account_id=?, extra_principal=?
        WHERE id=?`,
       [category_id, type, amount, description, txn_date,
        debt_id || null, savings_goal_id || null, credit_card_id || null,
-       Number(extra_principal) || 0, id]
+       account_id || null, Number(extra_principal) || 0, id]
     );
 
     // 3. Aplicar efectos del nuevo estado

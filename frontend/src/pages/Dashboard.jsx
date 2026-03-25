@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Wallet, TrendingUp, TrendingDown, CreditCard, PiggyBank, Bell, ArrowRight,
-  ChevronDown, ChevronUp, RefreshCw, Scissors, CalendarClock,
+  ChevronDown, ChevronUp, RefreshCw, Scissors, CalendarClock, ShieldCheck, Landmark,
 } from 'lucide-react';
 import { Link }       from 'react-router-dom';
 import { useStore }   from '../store/index.js';
@@ -26,6 +26,58 @@ function monthlyEq(amount, frequency) {
   return Number(amount);
 }
 
+function ScoreCard({ score }) {
+  const { total, dimensions } = score;
+  const color = total >= 75 ? '#22c55e' : total >= 50 ? '#f59e0b' : '#f43f5e';
+  const label = total >= 75 ? 'Excelente' : total >= 50 ? 'Regular' : 'Por mejorar';
+  const dims = [
+    { key: 'liquidez', label: 'Liquidez',        hint: 'Meses de gastos cubiertos' },
+    { key: 'ahorro',   label: 'Tasa de ahorro',  hint: '% ingreso ahorrado este mes' },
+    { key: 'deuda',    label: 'Nivel de deuda',  hint: 'Cuotas vs ingresos' },
+    { key: 'metas',    label: 'Metas',            hint: 'Progreso promedio' },
+  ];
+  return (
+    <div className="card">
+      <div className="flex items-center gap-2 mb-4">
+        <ShieldCheck size={15} style={{ color }} />
+        <h3 className="text-display font-bold text-sm">Score Financiero</h3>
+      </div>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+        {/* Círculo de score */}
+        <div className="flex-shrink-0 flex flex-col items-center gap-1">
+          <div
+            className="w-20 h-20 rounded-full border-4 flex items-center justify-center"
+            style={{ borderColor: color }}
+          >
+            <span className="text-display font-bold text-2xl text-mono" style={{ color }}>{total}</span>
+          </div>
+          <span className="text-xs font-semibold" style={{ color }}>{label}</span>
+        </div>
+        {/* Dimensiones */}
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+          {dims.map(({ key, label: dimLabel, hint }) => {
+            const val = dimensions[key] ?? 0;
+            const pct = (val / 25) * 100;
+            const c = pct >= 75 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#f43f5e';
+            return (
+              <div key={key}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-[var(--text-muted)]">{dimLabel}</span>
+                  <span className="font-semibold text-mono" style={{ color: c }}>{val}/25</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-surface-100 dark:bg-surface-700 overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: c }} />
+                </div>
+                <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{hint}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const {
     dashboard, dashLoading, fetchDashboard, user,
@@ -33,6 +85,7 @@ export default function Dashboard() {
     debts, fetchDebts,
     goals, fetchGoals,
     creditCards, fetchCreditCards,
+    accounts, fetchAccounts,
   } = useStore();
 
   useEffect(() => {
@@ -41,6 +94,7 @@ export default function Dashboard() {
     fetchDebts();
     fetchGoals();
     fetchCreditCards();
+    fetchAccounts();
   }, []);
 
   const [period, setPeriod]         = useState('biweekly');
@@ -157,6 +211,43 @@ export default function Dashboard() {
           color="amber"
         />
       </div>
+
+      {/* Score Financiero */}
+      {d?.score != null && <ScoreCard score={d.score} />}
+
+      {/* Cuentas bancarias */}
+      {accounts.length > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Landmark size={15} className="text-brand-500" />
+              <h3 className="text-display font-bold text-sm">Cuentas</h3>
+            </div>
+            <Link to="/accounts" className="text-brand-500 text-xs hover:underline">Ver todas</Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {accounts.map(a => (
+              <div key={a.id} className="p-3 rounded-xl bg-surface-50 dark:bg-surface-800 border border-[var(--border)]">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: a.color }} />
+                  <p className="text-xs font-medium truncate">{a.name}</p>
+                </div>
+                <p className={clsx('text-display font-bold text-sm text-mono', a.balance < 0 ? 'text-rose-500' : '')}>
+                  {fmt.currency(a.balance, currency)}
+                </p>
+                <p className="text-[10px] text-[var(--text-muted)]">{a.type_label}</p>
+              </div>
+            ))}
+            <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-800 border border-[var(--border)] flex flex-col justify-center items-center">
+              <p className="text-[10px] text-[var(--text-muted)] mb-0.5">Total</p>
+              <p className={clsx('text-display font-bold text-base text-mono',
+                accounts.reduce((s, a) => s + a.balance, 0) < 0 ? 'text-rose-500' : 'text-green-500')}>
+                {fmt.currency(accounts.reduce((s, a) => s + a.balance, 0), currency)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tarjetas de crédito */}
       {creditCards.length > 0 && (

@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, PiggyBank, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
+import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, Spinner, Empty, ProgressBar } from '../components/ui/index.jsx';
+import OcrModal from '../components/OcrModal.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
 
 const EMPTY_FORM = {
   type: 'expense', category_id: '', amount: '', description: '',
   txn_date: localDate(),
-  debt_id: '', savings_goal_id: '', credit_card_id: '', extra_principal: '0',
+  debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '', extra_principal: '0',
 };
 
 const EMPTY_REC = {
@@ -31,12 +32,13 @@ export default function Transactions() {
     goals, fetchGoals,
     recurring, recurringLoading, fetchRecurring, createRecurring, updateRecurring, deleteRecurring,
     creditCards, fetchCreditCards,
+    accounts, fetchAccounts,
     user,
   } = useStore();
 
   const currency = user?.currency || 'USD';
 
-  const [filters, setFilters] = useState({ type: '', category_id: '', from: '', to: '', page: 1 });
+  const [filters, setFilters] = useState({ type: '', category_id: '', account_id: '', from: '', to: '', page: 1 });
   const [showFilters, setShowFilters] = useState(false);
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -44,6 +46,7 @@ export default function Transactions() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [ocrModal, setOcrModal] = useState(false);
 
   // Recurring state
   const [recModal, setRecModal] = useState(false);
@@ -59,6 +62,7 @@ export default function Transactions() {
     fetchDebts();
     fetchGoals();
     fetchCreditCards();
+    fetchAccounts();
     api.get('/transactions/summary').then(r => setSummary(r.data)).catch(() => { });
   }, []);
 
@@ -77,7 +81,8 @@ export default function Transactions() {
       type: t.type, category_id: t.category_id, amount: t.amount,
       description: t.description || '', txn_date: String(t.txn_date).split('T')[0],
       debt_id: t.debt_id || '', savings_goal_id: t.savings_goal_id || '',
-      credit_card_id: t.credit_card_id || '', extra_principal: t.extra_principal || '0',
+      credit_card_id: t.credit_card_id || '', account_id: t.account_id || '',
+      extra_principal: t.extra_principal || '0',
     });
     setModal(true);
   };
@@ -91,6 +96,7 @@ export default function Transactions() {
         debt_id: form.debt_id || null,
         savings_goal_id: form.savings_goal_id || null,
         credit_card_id: form.credit_card_id || null,
+        account_id: form.account_id || null,
         extra_principal: Number(form.extra_principal) || 0,
       };
       if (editing) await updateTransaction(editing.id, payload);
@@ -112,6 +118,22 @@ export default function Transactions() {
   const exportCsv = () => {
     const params = new URLSearchParams({ from: filters.from || '', to: filters.to || '' });
     window.open(`/api/transactions/export?${params}`, '_blank');
+  };
+
+  // OCR: pre-fill form with extracted receipt data
+  const handleOcrConfirm = ({ description, amount, date, category_id, credit_card_id, account_id }) => {
+    setEditing(null);
+    setForm({
+      ...EMPTY_FORM,
+      type:           'expense',
+      description:    description    || '',
+      amount:         amount         || '',
+      txn_date:       date           || EMPTY_FORM.txn_date,
+      category_id:    category_id    || '',
+      credit_card_id: credit_card_id || '',
+      account_id:     account_id     || '',
+    });
+    setModal(true);
   };
 
   // Recurring handlers
@@ -196,6 +218,7 @@ export default function Transactions() {
           <button onClick={exportCsv} className="btn-ghost hidden sm:flex"><Download size={15} /> Exportar</button>
           <button onClick={openRecurring} className="btn-ghost"><RefreshCw size={15} /> Recurrentes</button>
           <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost"><Filter size={15} /> Filtros</button>
+          <button onClick={() => setOcrModal(true)} className="btn-ghost" title="Escanear recibo"><ScanLine size={15} /></button>
           <button onClick={openCreate} className="btn-primary"><Plus size={15} /> Nueva</button>
         </div>
       </div>
@@ -215,6 +238,15 @@ export default function Transactions() {
               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          {accounts.length > 0 && (
+            <div>
+              <label className="label">Cuenta</label>
+              <select className="input" value={filters.account_id} onChange={e => setFilters({ ...filters, account_id: e.target.value, page: 1 })}>
+                <option value="">Todas</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency || 'USD'})</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="label">Desde</label>
             <input className="input" type="date" value={filters.from} onChange={e => setFilters({ ...filters, from: e.target.value, page: 1 })} />
@@ -223,7 +255,7 @@ export default function Transactions() {
             <label className="label">Hasta</label>
             <input className="input" type="date" value={filters.to} onChange={e => setFilters({ ...filters, to: e.target.value, page: 1 })} />
           </div>
-          <button onClick={() => setFilters({ type: '', category_id: '', from: '', to: '', page: 1 })}
+          <button onClick={() => setFilters({ type: '', category_id: '', account_id: '', from: '', to: '', page: 1 })}
             className="btn-ghost text-xs col-span-2 sm:col-span-4 justify-center">Limpiar filtros</button>
         </div>
       )}
@@ -391,23 +423,70 @@ export default function Transactions() {
               </select>
             </div>
           )}
-          {form.type === 'expense' && !form.debt_id && !form.savings_goal_id && creditCards.length > 0 && (
-            <div>
-              <label className="label">Cargar a tarjeta de crédito (opcional)</label>
-              <select className="input" value={form.credit_card_id}
-                onChange={e => setForm({ ...form, credit_card_id: e.target.value })}>
-                <option value="">— Efectivo / débito —</option>
-                {creditCards.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}{c.last_four ? ` ···${c.last_four}` : ''}</option>
-                ))}
-              </select>
-              {form.credit_card_id && (
-                <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Este cargo no afectará tu saldo disponible hasta que pagues la tarjeta.
-                </p>
-              )}
-            </div>
-          )}
+          {/* ── Forma de pago ── */}
+          {(accounts.length > 0 || creditCards.length > 0) && (() => {
+            // Derivar método actual desde el form
+            const payMethod = form.credit_card_id ? 'card' : form.account_id ? 'debit' : 'cash';
+            const setMethod = (m) => setForm(f => ({
+              ...f,
+              credit_card_id: m === 'card'  ? (f.credit_card_id || '') : '',
+              account_id:     m === 'debit' ? (f.account_id     || '') : '',
+            }));
+            const showCash  = true;
+            const showDebit = accounts.length > 0;
+            const showCard  = creditCards.length > 0 && form.type === 'expense' && !form.debt_id && !form.savings_goal_id;
+            const cols      = [showCash, showDebit, showCard].filter(Boolean).length;
+            return (
+              <div>
+                <label className="label">Forma de pago</label>
+                <div className={`grid grid-cols-${cols} gap-2 mb-2`}>
+                  {showCash && (
+                    <button type="button" onClick={() => setMethod('cash')}
+                      className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-medium transition-all ${payMethod === 'cash' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'}`}>
+                      💵 Efectivo
+                    </button>
+                  )}
+                  {showDebit && (
+                    <button type="button" onClick={() => setMethod('debit')}
+                      className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-medium transition-all ${payMethod === 'debit' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'}`}>
+                      🏦 Débito / Cuenta
+                    </button>
+                  )}
+                  {showCard && (
+                    <button type="button" onClick={() => setMethod('card')}
+                      className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-medium transition-all ${payMethod === 'card' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'}`}>
+                      💳 Tarjeta de crédito
+                    </button>
+                  )}
+                </div>
+                {payMethod === 'debit' && (
+                  <select className="input" value={form.account_id}
+                    onChange={e => setForm(f => ({ ...f, account_id: e.target.value }))}>
+                    <option value="">— Seleccionar cuenta —</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.currency || 'USD'})</option>
+                    ))}
+                  </select>
+                )}
+                {payMethod === 'card' && (
+                  <>
+                    <select className="input" value={form.credit_card_id}
+                      onChange={e => setForm(f => ({ ...f, credit_card_id: e.target.value }))}>
+                      <option value="">— Seleccionar tarjeta —</option>
+                      {creditCards.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}{c.last_four ? ` ···${c.last_four}` : ''}</option>
+                      ))}
+                    </select>
+                    {form.credit_card_id && (
+                      <p className="text-xs text-[var(--text-muted)] mt-1">
+                        Este cargo no afectará tu saldo hasta que pagues la tarjeta.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })()}
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center">
@@ -592,6 +671,16 @@ export default function Transactions() {
         onConfirm={confirmDeleteRec}
         title="Eliminar recurrente"
         message={`¿Eliminar "${deletingRec?.description || deletingRec?.category_name}"? Se dejará de generar automáticamente.`}
+      />
+
+      <OcrModal
+        open={ocrModal}
+        onClose={() => setOcrModal(false)}
+        onConfirm={handleOcrConfirm}
+        categories={categories}
+        creditCards={creditCards}
+        accounts={accounts}
+        currency={currency}
       />
     </div>
   );

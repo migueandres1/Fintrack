@@ -2,7 +2,7 @@ import { useState }              from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ArrowRightLeft, CreditCard,
-  PiggyBank, Moon, Sun, LogOut, Menu, X, TrendingUp, CalendarRange, Wallet,
+  PiggyBank, Moon, Sun, LogOut, Menu, X, TrendingUp, CalendarRange, Wallet, BarChart2, Landmark,
 } from 'lucide-react';
 import { useStore } from '../../store/index.js';
 import clsx        from 'clsx';
@@ -32,9 +32,11 @@ function UserRow({ user, onLogout }) {
 const NAV = [
   { to: '/',            icon: LayoutDashboard,   label: 'Dashboard' },
   { to: '/transactions',icon: ArrowRightLeft,    label: 'Transacciones' },
+  { to: '/accounts',     icon: Landmark,       label: 'Cuentas' },
   { to: '/debts',        icon: Wallet,         label: 'Deudas' },
   { to: '/credit-cards', icon: CreditCard,     label: 'Tarjetas' },
   { to: '/savings',      icon: PiggyBank,      label: 'Metas de ahorro' },
+  { to: '/budget',       icon: BarChart2,      label: 'Presupuesto' },
   { to: '/planning',     icon: CalendarRange,  label: 'Planificación' },
 ];
 
