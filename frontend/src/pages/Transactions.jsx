@@ -11,7 +11,8 @@ import clsx from 'clsx';
 const EMPTY_FORM = {
   type: 'expense', category_id: '', amount: '', description: '',
   txn_date: localDate(),
-  debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '', extra_principal: '0',
+  debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '',
+  extra_principal: '0', payment_method: 'cash',
 };
 
 const EMPTY_REC = {
@@ -83,6 +84,7 @@ export default function Transactions() {
       debt_id: t.debt_id || '', savings_goal_id: t.savings_goal_id || '',
       credit_card_id: t.credit_card_id || '', account_id: t.account_id || '',
       extra_principal: t.extra_principal || '0',
+      payment_method: t.credit_card_id ? 'card' : t.account_id ? 'debit' : 'cash',
     });
     setModal(true);
   };
@@ -132,6 +134,7 @@ export default function Transactions() {
       category_id:    category_id    || '',
       credit_card_id: credit_card_id || '',
       account_id:     account_id     || '',
+      payment_method: credit_card_id ? 'card' : account_id ? 'debit' : 'cash',
     });
     setModal(true);
   };
@@ -425,12 +428,12 @@ export default function Transactions() {
           )}
           {/* ── Forma de pago ── */}
           {(accounts.length > 0 || creditCards.length > 0) && (() => {
-            // Derivar método actual desde el form
-            const payMethod = form.credit_card_id ? 'card' : form.account_id ? 'debit' : 'cash';
+            const payMethod = form.payment_method || 'cash';
             const setMethod = (m) => setForm(f => ({
               ...f,
-              credit_card_id: m === 'card'  ? (f.credit_card_id || '') : '',
-              account_id:     m === 'debit' ? (f.account_id     || '') : '',
+              payment_method: m,
+              credit_card_id: m === 'card'  ? f.credit_card_id : '',
+              account_id:     m === 'debit' ? f.account_id     : '',
             }));
             const showCash  = true;
             const showDebit = accounts.length > 0;
@@ -439,22 +442,40 @@ export default function Transactions() {
             return (
               <div>
                 <label className="label">Forma de pago</label>
-                <div className={`grid grid-cols-${cols} gap-2 mb-2`}>
+                <div className={clsx(
+                  'grid gap-2 mb-2',
+                  cols === 3 ? 'grid-cols-1 sm:grid-cols-3' : cols === 2 ? 'grid-cols-2' : 'grid-cols-1'
+                )}>
                   {showCash && (
                     <button type="button" onClick={() => setMethod('cash')}
-                      className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-medium transition-all ${payMethod === 'cash' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'}`}>
+                      className={clsx(
+                        'flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-sm font-medium transition-all',
+                        payMethod === 'cash'
+                          ? 'border-brand-500 bg-brand-500/10 text-brand-500'
+                          : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
+                      )}>
                       💵 Efectivo
                     </button>
                   )}
                   {showDebit && (
                     <button type="button" onClick={() => setMethod('debit')}
-                      className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-medium transition-all ${payMethod === 'debit' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'}`}>
+                      className={clsx(
+                        'flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-sm font-medium transition-all',
+                        payMethod === 'debit'
+                          ? 'border-brand-500 bg-brand-500/10 text-brand-500'
+                          : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
+                      )}>
                       🏦 Débito / Cuenta
                     </button>
                   )}
                   {showCard && (
                     <button type="button" onClick={() => setMethod('card')}
-                      className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-medium transition-all ${payMethod === 'card' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'}`}>
+                      className={clsx(
+                        'flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-sm font-medium transition-all',
+                        payMethod === 'card'
+                          ? 'border-brand-500 bg-brand-500/10 text-brand-500'
+                          : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
+                      )}>
                       💳 Tarjeta de crédito
                     </button>
                   )}

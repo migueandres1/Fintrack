@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react';
 import {
   Wallet, TrendingUp, TrendingDown, CreditCard, PiggyBank, Bell, ArrowRight,
   ChevronDown, ChevronUp, RefreshCw, Scissors, CalendarClock, ShieldCheck, Landmark,
+  Plus, ArrowUpCircle, ArrowDownCircle,
 } from 'lucide-react';
-import { Link }       from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useStore }   from '../store/index.js';
-import { fmt }        from '../utils/format.js';
-import { StatCard, ProgressBar, Spinner } from '../components/ui/index.jsx';
-import clsx           from 'clsx';
+import { fmt, localDate } from '../utils/format.js';
+import { StatCard, ProgressBar, Spinner, Modal } from '../components/ui/index.jsx';
+import clsx from 'clsx';
 
 // Próxima fecha de un día-del-mes (este mes si aún no pasó, si no el siguiente)
 function nextDayOfMonth(day) {
   const today = new Date();
-  const d = Math.max(1, Math.min(28, day)); // cap a 28 para evitar meses cortos
+  const d = Math.max(1, Math.min(28, day));
   const candidate = new Date(today.getFullYear(), today.getMonth(), d);
   if (candidate > today) return candidate;
   return new Date(today.getFullYear(), today.getMonth() + 1, d);
@@ -26,16 +28,27 @@ function monthlyEq(amount, frequency) {
   return Number(amount);
 }
 
+const SCORE_ADVICE = {
+  liquidez: 'Aumenta tu fondo de emergencia para cubrir al menos 3 meses de gastos.',
+  ahorro:   'Intenta ahorrar al menos el 20% de tus ingresos cada mes.',
+  deuda:    'Reduce los pagos de deuda por debajo del 30% de tus ingresos.',
+  metas:    'Crea o avanza en tus metas de ahorro para mejorar este indicador.',
+};
+
 function ScoreCard({ score }) {
   const { total, dimensions } = score;
   const color = total >= 75 ? '#22c55e' : total >= 50 ? '#f59e0b' : '#f43f5e';
   const label = total >= 75 ? 'Excelente' : total >= 50 ? 'Regular' : 'Por mejorar';
   const dims = [
-    { key: 'liquidez', label: 'Liquidez',        hint: 'Meses de gastos cubiertos' },
-    { key: 'ahorro',   label: 'Tasa de ahorro',  hint: '% ingreso ahorrado este mes' },
-    { key: 'deuda',    label: 'Nivel de deuda',  hint: 'Cuotas vs ingresos' },
-    { key: 'metas',    label: 'Metas',            hint: 'Progreso promedio' },
+    { key: 'liquidez', label: 'Liquidez',       hint: 'Meses de gastos cubiertos' },
+    { key: 'ahorro',   label: 'Tasa de ahorro', hint: '% ingreso ahorrado este mes' },
+    { key: 'deuda',    label: 'Nivel de deuda', hint: 'Cuotas vs ingresos' },
+    { key: 'metas',    label: 'Metas',           hint: 'Progreso promedio' },
   ];
+
+  const worstKey = Object.entries(dimensions).sort((a, b) => a[1] - b[1])[0]?.[0];
+  const advice = worstKey ? SCORE_ADVICE[worstKey] : null;
+
   return (
     <div className="card">
       <div className="flex items-center gap-2 mb-4">
@@ -43,7 +56,6 @@ function ScoreCard({ score }) {
         <h3 className="text-display font-bold text-sm">Score Financiero</h3>
       </div>
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-        {/* Círculo de score */}
         <div className="flex-shrink-0 flex flex-col items-center gap-1">
           <div
             className="w-20 h-20 rounded-full border-4 flex items-center justify-center"
@@ -53,7 +65,6 @@ function ScoreCard({ score }) {
           </div>
           <span className="text-xs font-semibold" style={{ color }}>{label}</span>
         </div>
-        {/* Dimensiones */}
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
           {dims.map(({ key, label: dimLabel, hint }) => {
             const val = dimensions[key] ?? 0;
@@ -74,9 +85,20 @@ function ScoreCard({ score }) {
           })}
         </div>
       </div>
+      {total < 95 && advice && (
+        <p className="text-xs text-[var(--text-muted)] mt-3 pt-3 border-t border-[var(--border)] italic">
+          💡 {advice}
+        </p>
+      )}
     </div>
   );
 }
+
+const EMPTY_QUICK = {
+  type: 'expense', category_id: '', amount: '', description: '',
+  txn_date: localDate(), debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '',
+  extra_principal: '0', payment_method: 'cash',
+};
 
 export default function Dashboard() {
   const {
@@ -86,7 +108,14 @@ export default function Dashboard() {
     goals, fetchGoals,
     creditCards, fetchCreditCards,
     accounts, fetchAccounts,
+    categories, fetchCategories, createTransaction,
   } = useStore();
+
+  const [period, setPeriod]             = useState('biweekly');
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [quickModal, setQuickModal]     = useState(false);
+  const [quickForm,  setQuickForm]      = useState(EMPTY_QUICK);
+  const [quickBusy,  setQuickBusy]      = useState(false);
 
   useEffect(() => {
     fetchDashboard();
@@ -95,17 +124,42 @@ export default function Dashboard() {
     fetchGoals();
     fetchCreditCards();
     fetchAccounts();
+    fetchCategories();
   }, []);
-
-  const [period, setPeriod]         = useState('biweekly');
-  const [showBreakdown, setShowBreakdown] = useState(false);
 
   if (dashLoading && !dashboard) return <Spinner />;
 
   const d        = dashboard;
   const currency = user?.currency || 'USD';
 
-  /* ── Distribución de ingresos ─────────────────────────────────── */
+  /* ── Quick add ────────────────────────────────────────────── */
+  const openQuick = () => { setQuickForm({ ...EMPTY_QUICK, txn_date: localDate() }); setQuickModal(true); };
+  const saveQuick = async (e) => {
+    e.preventDefault();
+    setQuickBusy(true);
+    try {
+      await createTransaction({
+        ...quickForm,
+        debt_id:         quickForm.debt_id         || null,
+        savings_goal_id: quickForm.savings_goal_id || null,
+        credit_card_id:  quickForm.credit_card_id  || null,
+        account_id:      quickForm.account_id      || null,
+        extra_principal: 0,
+      });
+      setQuickModal(false);
+      fetchDashboard();
+    } finally { setQuickBusy(false); }
+  };
+  const setQuickMethod = (m) => setQuickForm(f => ({
+    ...f,
+    payment_method: m,
+    credit_card_id: m === 'card'  ? f.credit_card_id : '',
+    account_id:     m === 'debit' ? f.account_id     : '',
+  }));
+  const quickCats      = categories.filter(c => !quickForm.type || c.type === quickForm.type);
+  const quickPayMethod = quickForm.payment_method || 'cash';
+
+  /* ── Distribución de ingresos ─────────────────────────────── */
   const activeRec   = recurring.filter(r => r.is_active);
   const activeDebts = debts.filter(d => d.is_active);
 
@@ -116,7 +170,6 @@ export default function Dashboard() {
   const monthlyDebts   = activeDebts
     .reduce((s, d) => s + Number(d.monthly_payment), 0);
 
-  // Monthly savings needed per goal
   const activeGoals = goals.filter(g => !g.is_completed && g.deadline);
   const goalsWithMonthly = activeGoals.map(g => {
     const remaining = Math.max(0, g.target_amount - g.current_amount);
@@ -127,7 +180,6 @@ export default function Dashboard() {
   });
   const monthlySavings = goalsWithMonthly.reduce((s, g) => s + g.neededMonthly, 0);
 
-  // Per-period divisor: 2 for biweekly (quincenal), 1 for monthly
   const div         = period === 'biweekly' ? 2 : 1;
   const periodLabel = period === 'biweekly' ? 'quincenal' : 'mensual';
 
@@ -137,80 +189,93 @@ export default function Dashboard() {
   const pSavings = monthlySavings / div;
   const pFree    = pIncome - pFixed - pDebts - pSavings;
 
-  // Segmentos de la barra (% sobre ingreso mensual, siempre proporcionales)
   const fixedPct   = monthlyIncome > 0 ? Math.min(100, (monthlyFixed   / monthlyIncome) * 100) : 0;
   const debtPct    = monthlyIncome > 0 ? Math.min(100, (monthlyDebts   / monthlyIncome) * 100) : 0;
   const savingsPct = monthlyIncome > 0 ? Math.min(100, (monthlySavings / monthlyIncome) * 100) : 0;
   const freePct    = Math.max(0, 100 - fixedPct - debtPct - savingsPct);
+  const debtRatio  = monthlyIncome > 0 ? (monthlyDebts / monthlyIncome) : 0;
 
-  const debtRatio = monthlyIncome > 0 ? (monthlyDebts / monthlyIncome) : 0;
-
-  // Items del desglose
   const breakdownItems = [
     {
-      category: 'Gastos fijos',
-      color: '#f43f5e',
-      total: pFixed,
+      category: 'Gastos fijos', color: '#f43f5e', total: pFixed,
       items: activeRec.filter(r => r.type === 'expense').map(r => ({
         name: r.description || r.category_name,
         amount: monthlyEq(r.amount, r.frequency) / div,
       })),
     },
     {
-      category: 'Deudas',
-      color: '#f59e0b',
-      total: pDebts,
-      items: activeDebts.map(d => ({
-        name: d.name,
-        amount: Number(d.monthly_payment) / div,
-      })),
+      category: 'Deudas', color: '#f59e0b', total: pDebts,
+      items: activeDebts.map(d => ({ name: d.name, amount: Number(d.monthly_payment) / div })),
     },
     {
-      category: 'Metas de ahorro',
-      color: '#6366f1',
-      total: pSavings,
-      items: goalsWithMonthly.map(g => ({
-        name: g.name,
-        amount: g.neededMonthly / div,
-      })),
+      category: 'Metas de ahorro', color: '#6366f1', total: pSavings,
+      items: goalsWithMonthly.map(g => ({ name: g.name, amount: g.neededMonthly / div })),
     },
   ].filter(g => g.items.length > 0);
+
+  /* ── Trend chart ──────────────────────────────────────────── */
+  const trendData = (d?.monthly_trend || []).map(row => ({
+    month:    row.month,
+    income:   Number(row.income)   || 0,
+    expenses: Number(row.expenses) || 0,
+  }));
+  const tickK = (v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v;
+
+  /* ── Fallback distribución sin recurrentes ────────────────── */
+  const actualMonthIncome   = d?.this_month?.income   || 0;
+  const actualMonthExpenses = d?.this_month?.expenses || 0;
+  const hasRecurringIncome  = monthlyIncome > 0;
+  const hasActualData       = actualMonthIncome > 0;
+
+  /* ── Accounts multi-currency ──────────────────────────────── */
+  const accountCurrencies = [...new Set(accounts.map(a => a.currency || 'USD'))];
+  const singleCurrency    = accountCurrencies.length <= 1;
 
   return (
     <div className="space-y-6 animate-fade-up">
       {/* Header */}
-      <div>
-        <h1 className="text-display font-bold text-xl">Dashboard</h1>
-        <p className="text-[var(--text-muted)] text-sm">Resumen de tu situación financiera</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-display font-bold text-xl">Dashboard</h1>
+          <p className="text-[var(--text-muted)] text-sm">Resumen de tu situación financiera</p>
+        </div>
+        <button onClick={openQuick} className="btn-primary">
+          <Plus size={15} /> Registrar
+        </button>
       </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          label="Balance total"
-          value={fmt.currency(d?.balance?.total, currency)}
-          icon={Wallet}
-          color="brand"
-        />
-        <StatCard
-          label="Ingresos este mes"
-          value={fmt.currency(d?.this_month?.income, currency)}
-          icon={TrendingUp}
-          color="green"
-        />
-        <StatCard
-          label="Gastos este mes"
-          value={fmt.currency(d?.this_month?.expenses, currency)}
-          icon={TrendingDown}
-          color="rose"
-        />
-        <StatCard
-          label="Deuda total activa"
-          value={fmt.currency(d?.total_debt, currency)}
-          icon={CreditCard}
-          color="amber"
-        />
+        <StatCard label="Balance total"      value={fmt.currency(d?.balance?.total, currency)}        icon={Wallet}      color="brand" />
+        <StatCard label="Ingresos este mes"  value={fmt.currency(d?.this_month?.income, currency)}    icon={TrendingUp}  color="green" />
+        <StatCard label="Gastos este mes"    value={fmt.currency(d?.this_month?.expenses, currency)}  icon={TrendingDown} color="rose" />
+        <StatCard label="Deuda total activa" value={fmt.currency(d?.total_debt, currency)}            icon={CreditCard}  color="amber" />
       </div>
+
+      {/* Tendencia 6 meses */}
+      {trendData.length > 0 && (
+        <div className="card">
+          <h3 className="text-display font-bold text-sm mb-3">Tendencia — últimos 6 meses</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={trendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={12}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="month" tickFormatter={fmt.monthYear} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} tickFormatter={tickK} />
+              <Tooltip
+                formatter={(v) => fmt.currency(v, currency)}
+                labelFormatter={fmt.monthYear}
+                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+              />
+              <Bar dataKey="income"   name="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" name="Gastos"   fill="#f43f5e" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex gap-4 mt-2 text-xs text-[var(--text-muted)]">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-green-500 inline-block" />Ingresos</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-rose-500 inline-block" />Gastos</span>
+          </div>
+        </div>
+      )}
 
       {/* Score Financiero */}
       {d?.score != null && <ScoreCard score={d.score} />}
@@ -233,18 +298,20 @@ export default function Dashboard() {
                   <p className="text-xs font-medium truncate">{a.name}</p>
                 </div>
                 <p className={clsx('text-display font-bold text-sm text-mono', a.balance < 0 ? 'text-rose-500' : '')}>
-                  {fmt.currency(a.balance, currency)}
+                  {fmt.currency(a.balance, a.currency || 'USD')}
                 </p>
-                <p className="text-[10px] text-[var(--text-muted)]">{a.type_label}</p>
+                <p className="text-[10px] text-[var(--text-muted)]">{a.type_label} · {a.currency || 'USD'}</p>
               </div>
             ))}
-            <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-800 border border-[var(--border)] flex flex-col justify-center items-center">
-              <p className="text-[10px] text-[var(--text-muted)] mb-0.5">Total</p>
-              <p className={clsx('text-display font-bold text-base text-mono',
-                accounts.reduce((s, a) => s + a.balance, 0) < 0 ? 'text-rose-500' : 'text-green-500')}>
-                {fmt.currency(accounts.reduce((s, a) => s + a.balance, 0), currency)}
-              </p>
-            </div>
+            {singleCurrency && (
+              <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-800 border border-[var(--border)] flex flex-col justify-center items-center">
+                <p className="text-[10px] text-[var(--text-muted)] mb-0.5">Total</p>
+                <p className={clsx('text-display font-bold text-base text-mono',
+                  accounts.reduce((s, a) => s + a.balance, 0) < 0 ? 'text-rose-500' : 'text-green-500')}>
+                  {fmt.currency(accounts.reduce((s, a) => s + a.balance, 0), accountCurrencies[0] || currency)}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -303,13 +370,47 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Últimas transacciones — arriba para mobile */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-display font-bold text-sm">Últimas transacciones</h3>
+          <Link to="/transactions" className="text-brand-500 text-xs flex items-center gap-1 hover:underline">
+            Ver todas <ArrowRight size={12} />
+          </Link>
+        </div>
+        {!d?.recent_transactions?.length ? (
+          <p className="text-xs text-[var(--text-muted)]">Sin transacciones</p>
+        ) : (
+          <div className="divide-y divide-[var(--border)]">
+            {d.recent_transactions.map((t) => (
+              <div key={t.id} className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center"
+                    style={{ background: `${t.color}20`, color: t.color }}
+                  >
+                    {t.type === 'income' ? <ArrowUpCircle size={14} /> : <ArrowDownCircle size={14} />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium">{t.description || t.category_name}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{fmt.date(t.txn_date)} · {t.category_name}</p>
+                  </div>
+                </div>
+                <span className={t.type === 'income' ? 'amount-positive' : 'amount-negative'} style={{ fontSize: 13 }}>
+                  {t.type === 'income' ? '+' : '-'}{fmt.currency(t.amount, currency)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Distribución de ingresos */}
         <div className="card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-display font-bold text-sm">Distribución de ingresos</h3>
             <div className="flex items-center gap-2">
-              {/* Toggle mensual / quincenal */}
               <div className="flex rounded-lg overflow-hidden border border-[var(--border)] text-xs">
                 {['monthly', 'biweekly'].map(p => (
                   <button
@@ -330,12 +431,49 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {monthlyIncome === 0 ? (
-            <div className="h-[180px] flex flex-col items-center justify-center text-[var(--text-muted)] text-sm gap-2">
-              <TrendingUp size={28} className="opacity-30" />
-              <p className="text-xs">Agrega ingresos recurrentes para ver tu distribución</p>
-              <Link to="/transactions" className="text-brand-500 text-xs hover:underline">Transacciones → Recurrentes</Link>
-            </div>
+          {!hasRecurringIncome ? (
+            hasActualData ? (
+              /* Fallback con datos reales del mes cuando no hay recurrentes */
+              <div>
+                <p className="text-xs text-[var(--text-muted)] mb-3">
+                  Basado en transacciones reales de este mes ·{' '}
+                  <Link to="/transactions" className="text-brand-500 hover:underline">Agregar ingresos recurrentes</Link>
+                </p>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {[
+                    { label: 'Ingresos',   value: actualMonthIncome,                       color: 'text-green-500' },
+                    { label: 'Gastos',     value: actualMonthExpenses,                     color: 'text-rose-500' },
+                    { label: 'Disponible', value: actualMonthIncome - actualMonthExpenses,  color: (actualMonthIncome - actualMonthExpenses) >= 0 ? 'text-green-500' : 'text-rose-500' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label}>
+                      <p className="text-xs text-[var(--text-muted)] mb-0.5">{label}</p>
+                      <p className={clsx('text-display font-bold text-sm text-mono', color)}>
+                        {fmt.currency(value, currency)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex h-4 rounded-lg overflow-hidden gap-px">
+                  <div className="bg-rose-500 transition-all duration-700 h-full"
+                    style={{ width: `${Math.min(100, actualMonthIncome > 0 ? (actualMonthExpenses / actualMonthIncome) * 100 : 100)}%` }} />
+                  <div className="bg-green-500/25 flex-1 h-full" />
+                </div>
+                <div className="flex gap-4 mt-2 text-xs text-[var(--text-muted)]">
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-rose-500 inline-block" />
+                    Gastos {actualMonthIncome > 0 ? ((actualMonthExpenses / actualMonthIncome) * 100).toFixed(0) : 0}%
+                  </span>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-green-500/40 inline-block" />
+                    Libre {actualMonthIncome > 0 ? Math.max(0, 100 - (actualMonthExpenses / actualMonthIncome) * 100).toFixed(0) : 0}%
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="h-[180px] flex flex-col items-center justify-center text-[var(--text-muted)] text-sm gap-2">
+                <TrendingUp size={28} className="opacity-30" />
+                <p className="text-xs">Agrega ingresos recurrentes para ver tu distribución</p>
+                <Link to="/transactions" className="text-brand-500 text-xs hover:underline">Transacciones → Recurrentes</Link>
+              </div>
+            )
           ) : (
             <>
               {/* Stats: 5 columnas */}
@@ -360,9 +498,9 @@ export default function Dashboard() {
               {/* Barra de distribución */}
               <div className="space-y-2 mb-3">
                 <div className="flex h-4 rounded-lg overflow-hidden gap-px">
-                  <div className="bg-rose-500   transition-all duration-700 h-full" style={{ width: `${fixedPct}%`   }} title={`Gastos fijos ${fixedPct.toFixed(0)}%`} />
-                  <div className="bg-amber-500  transition-all duration-700 h-full" style={{ width: `${debtPct}%`    }} title={`Deudas ${debtPct.toFixed(0)}%`} />
-                  <div className="bg-brand-500  transition-all duration-700 h-full" style={{ width: `${savingsPct}%` }} title={`Metas ${savingsPct.toFixed(0)}%`} />
+                  <div className="bg-rose-500   transition-all duration-700 h-full" style={{ width: `${fixedPct}%`   }} />
+                  <div className="bg-amber-500  transition-all duration-700 h-full" style={{ width: `${debtPct}%`    }} />
+                  <div className="bg-brand-500  transition-all duration-700 h-full" style={{ width: `${savingsPct}%` }} />
                   <div className="bg-green-500/25 flex-1 h-full" style={{ minWidth: freePct > 0 ? undefined : 0 }} />
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
@@ -373,7 +511,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Desglose por categoría */}
+              {/* Desglose */}
               {breakdownItems.length > 0 && (
                 <div>
                   <button
@@ -383,7 +521,6 @@ export default function Dashboard() {
                     {showBreakdown ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                     {showBreakdown ? 'Ocultar desglose' : 'Ver desglose detallado'}
                   </button>
-
                   {showBreakdown && (
                     <div className="mt-3 space-y-3">
                       {breakdownItems.map(group => (
@@ -402,7 +539,6 @@ export default function Dashboard() {
                           </div>
                         </div>
                       ))}
-                      {/* Total comprometido */}
                       <div className="pt-2 border-t border-[var(--border)] flex justify-between text-xs font-semibold">
                         <span>Total a mover</span>
                         <span className="text-mono">{fmt.currency(pFixed + pDebts + pSavings, currency)}</span>
@@ -412,7 +548,7 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Alerta de sobreendeudamiento */}
+              {/* Alertas de deuda */}
               {debtRatio > 0.40 && (
                 <div className="mt-3 p-2.5 rounded-lg border border-rose-400 bg-rose-50 dark:bg-rose-900/10 text-xs text-rose-700 dark:text-rose-400">
                   ⚠ Tus cuotas de deuda representan el <strong>{(debtRatio * 100).toFixed(0)}%</strong> de tus ingresos. Se recomienda no superar el 30–35%.
@@ -429,7 +565,7 @@ export default function Dashboard() {
 
         {/* Panel derecho */}
         <div className="space-y-3">
-          {/* Upcoming payments */}
+          {/* Próximos pagos */}
           <div className="card">
             <div className="flex items-center gap-2 mb-3">
               <Bell size={15} className="text-amber-500" />
@@ -453,7 +589,7 @@ export default function Dashboard() {
           </div>
 
           {/* Próximos gastos recurrentes */}
-          {activeRec.filter(r => r.type === 'expense' && r.is_active).length > 0 && (
+          {activeRec.filter(r => r.type === 'expense').length > 0 && (
             <div className="card">
               <div className="flex items-center gap-2 mb-3">
                 <RefreshCw size={15} className="text-rose-500" />
@@ -481,7 +617,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Goals */}
+          {/* Metas */}
           <div className="card">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -510,70 +646,102 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Transactions */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-display font-bold text-sm">Últimas transacciones</h3>
-          <Link to="/transactions" className="text-brand-500 text-xs flex items-center gap-1 hover:underline">
-            Ver todas <ArrowRight size={12} />
-          </Link>
-        </div>
-        {!d?.recent_transactions?.length ? (
-          <p className="text-xs text-[var(--text-muted)]">Sin transacciones</p>
-        ) : (
-          <div className="divide-y divide-[var(--border)]">
-            {d.recent_transactions.map((t) => (
-              <div key={t.id} className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-xs"
-                    style={{ background: `${t.color}20`, color: t.color }}
-                  >
-                    {t.category_name?.[0]}
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium">{t.description || t.category_name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{fmt.date(t.txn_date)}</p>
-                  </div>
-                </div>
-                <span className={t.type === 'income' ? 'amount-positive' : 'amount-negative'} style={{ fontSize: 13 }}>
-                  {t.type === 'income' ? '+' : '-'}{fmt.currency(t.amount, currency)}
-                </span>
-              </div>
+      {/* Modal registrar transacción rápida */}
+      <Modal open={quickModal} onClose={() => setQuickModal(false)} title="Registrar transacción">
+        <form onSubmit={saveQuick} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            {['income', 'expense'].map((tp) => (
+              <button key={tp} type="button"
+                onClick={() => setQuickForm(f => ({ ...f, type: tp, category_id: '', debt_id: '', savings_goal_id: '', credit_card_id: '' }))}
+                className={clsx(
+                  'p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2',
+                  quickForm.type === tp
+                    ? tp === 'income'
+                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-600'
+                      : 'border-rose-500 bg-rose-50 dark:bg-rose-900/20 text-rose-600'
+                    : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
+                )}>
+                {tp === 'income' ? <ArrowUpCircle size={16} /> : <ArrowDownCircle size={16} />}
+                {tp === 'income' ? 'Ingreso' : 'Gasto'}
+              </button>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Debts summary */}
-      {d?.debts?.filter(db => db.is_active).length > 0 && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-display font-bold text-sm">Deudas activas</h3>
-            <Link to="/debts" className="text-brand-500 text-xs flex items-center gap-1 hover:underline">
-              Administrar <ArrowRight size={12} />
-            </Link>
+          <div>
+            <label className="label">Categoría</label>
+            <select className="input" value={quickForm.category_id}
+              onChange={e => setQuickForm(f => ({ ...f, category_id: e.target.value }))} required>
+              <option value="">Seleccionar...</option>
+              {quickCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {d.debts.filter(db => db.is_active).map((debt) => {
-              const pct = 100 - (debt.current_balance / (debt.initial_balance || 1)) * 100;
-              return (
-                <div key={debt.id} className="p-3 rounded-xl bg-surface-50 dark:bg-surface-800 border border-[var(--border)]">
-                  <div className="flex justify-between mb-2">
-                    <p className="text-xs font-semibold">{debt.name}</p>
-                    <span className="text-xs text-[var(--text-muted)] text-mono">{fmt.pct(debt.annual_rate)}/año</span>
-                  </div>
-                  <p className="text-display font-bold text-base text-mono mb-2">
-                    {fmt.currency(debt.current_balance, currency)}
-                  </p>
-                  <ProgressBar value={pct} max={100} color="#f43f5e" />
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{pct.toFixed(0)}% pagado</p>
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Monto</label>
+              <input className="input" type="number" step="0.01" min="0.01" placeholder="0.00"
+                value={quickForm.amount} onChange={e => setQuickForm(f => ({ ...f, amount: e.target.value }))} required />
+            </div>
+            <div>
+              <label className="label">Fecha</label>
+              <input className="input" type="date" value={quickForm.txn_date}
+                onChange={e => setQuickForm(f => ({ ...f, txn_date: e.target.value }))} required />
+            </div>
           </div>
-        </div>
-      )}
+          <div>
+            <label className="label">Descripción (opcional)</label>
+            <input className="input" type="text" placeholder="Ej: Supermercado"
+              value={quickForm.description} onChange={e => setQuickForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+          {(accounts.length > 0 || creditCards.length > 0) && (
+            <div>
+              <label className="label">Forma de pago</label>
+              <div className={clsx(
+                'grid gap-2',
+                (creditCards.length > 0 && quickForm.type === 'expense') ? 'grid-cols-3' : accounts.length > 0 ? 'grid-cols-2' : 'grid-cols-1'
+              )}>
+                <button type="button" onClick={() => setQuickMethod('cash')}
+                  className={clsx('flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border text-xs font-medium transition-all',
+                    quickPayMethod === 'cash' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400')}>
+                  💵 Efectivo
+                </button>
+                {accounts.length > 0 && (
+                  <button type="button" onClick={() => setQuickMethod('debit')}
+                    className={clsx('flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border text-xs font-medium transition-all',
+                      quickPayMethod === 'debit' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400')}>
+                    🏦 Débito
+                  </button>
+                )}
+                {creditCards.length > 0 && quickForm.type === 'expense' && (
+                  <button type="button" onClick={() => setQuickMethod('card')}
+                    className={clsx('flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border text-xs font-medium transition-all',
+                      quickPayMethod === 'card' ? 'border-brand-500 bg-brand-500/10 text-brand-500' : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400')}>
+                    💳 Tarjeta
+                  </button>
+                )}
+              </div>
+              {quickPayMethod === 'debit' && accounts.length > 0 && (
+                <select className="input mt-2" value={quickForm.account_id}
+                  onChange={e => setQuickForm(f => ({ ...f, account_id: e.target.value }))}>
+                  <option value="">— Seleccionar cuenta —</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency || 'USD'})</option>)}
+                </select>
+              )}
+              {quickPayMethod === 'card' && creditCards.length > 0 && (
+                <select className="input mt-2" value={quickForm.credit_card_id}
+                  onChange={e => setQuickForm(f => ({ ...f, credit_card_id: e.target.value }))}>
+                  <option value="">— Seleccionar tarjeta —</option>
+                  {creditCards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+            </div>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={() => setQuickModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={quickBusy} className="btn-primary flex-1 justify-center">
+              {quickBusy ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -91,6 +91,7 @@ export async function update(req, res) {
     );
     res.json({ success: true });
   } catch (err) {
+    console.error('[accounts.update]', err);
     res.status(500).json({ error: 'Error interno' });
   }
 }

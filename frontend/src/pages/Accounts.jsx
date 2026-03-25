@@ -255,7 +255,7 @@ export default function Accounts() {
 
       {/* Modal crear/editar */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar cuenta' : 'Nueva cuenta'}>
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="space-y-3">
           <div>
             <label className="label">Nombre</label>
             <input className="input" type="text" placeholder="Ej: Banco Agrícola, Efectivo billetera"
@@ -269,7 +269,7 @@ export default function Accounts() {
                 <button key={value} type="button"
                   onClick={() => setForm({ ...form, type: value })}
                   className={clsx(
-                    'flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all',
+                    'flex items-center gap-2 p-2 rounded-xl border text-xs font-medium transition-all',
                     form.type === value
                       ? 'border-brand-500 bg-brand-500/10 text-brand-500'
                       : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
@@ -284,16 +284,14 @@ export default function Accounts() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Saldo inicial</label>
-              <input className="input" type="number" step="0.01" placeholder="0.00"
-                value={form.initial_balance} onChange={e => setForm({ ...form, initial_balance: e.target.value })} required />
-              <p className="text-xs text-[var(--text-muted)] mt-1">El saldo actual se calculará sumando tus transacciones.</p>
+              <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
+                value={form.initial_balance} onChange={e => setForm({ ...form, initial_balance: e.target.value })} />
             </div>
             <div>
               <label className="label">Moneda</label>
               <select className="input" value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })}>
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Moneda de esta cuenta.</p>
             </div>
           </div>
 

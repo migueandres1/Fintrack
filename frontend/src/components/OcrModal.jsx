@@ -242,11 +242,11 @@ export default function OcrModal({ open, onClose, onConfirm, categories = [], cr
               {/* Forma de pago */}
               <div className="col-span-2">
                 <label className="label">Forma de pago</label>
-                <div className={clsx('grid gap-2', creditCards.length > 0 ? 'grid-cols-3' : 'grid-cols-2')}>
+                <div className={clsx('grid gap-2', creditCards.length > 0 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2')}>
                   {[
-                    { value: 'cash',  label: 'Efectivo',    emoji: '💵' },
-                    { value: 'debit', label: 'Débito/Cuenta', emoji: '🏦' },
-                    ...(creditCards.length > 0 ? [{ value: 'card', label: 'T. Crédito', emoji: '💳' }] : []),
+                    { value: 'cash',  label: 'Efectivo',       emoji: '💵' },
+                    { value: 'debit', label: 'Débito / Cuenta', emoji: '🏦' },
+                    ...(creditCards.length > 0 ? [{ value: 'card', label: 'Tarjeta de crédito', emoji: '💳' }] : []),
                   ].map(({ value, label, emoji }) => (
                     <button key={value} type="button"
                       onClick={() => setFields(f => ({
@@ -256,7 +256,7 @@ export default function OcrModal({ open, onClose, onConfirm, categories = [], cr
                         account_id:     value === 'debit' ? f.account_id     : '',
                       }))}
                       className={clsx(
-                        'flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-medium transition-all',
+                        'flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-sm font-medium transition-all',
                         fields.payment_method === value
                           ? 'border-brand-500 bg-brand-500/10 text-brand-500'
                           : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
