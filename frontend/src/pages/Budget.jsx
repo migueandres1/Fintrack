@@ -134,20 +134,20 @@ export default function Budget() {
 
       {/* Summary cards */}
       {items.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="card">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Presupuesto total</p>
-            <p className="text-display font-bold text-lg text-mono">{fmt.currency(totalBudget, currency)}</p>
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="card !p-3 sm:!p-4">
+            <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Presupuestado</p>
+            <p className="text-display font-bold text-sm sm:text-lg text-mono truncate">{fmt.currency(totalBudget, currency)}</p>
           </div>
-          <div className="card">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Gastado</p>
-            <p className={clsx('text-display font-bold text-lg text-mono', totalSpent > totalBudget ? 'text-rose-500' : 'text-[var(--text)]')}>
+          <div className="card !p-3 sm:!p-4">
+            <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Gastado</p>
+            <p className={clsx('text-display font-bold text-sm sm:text-lg text-mono truncate', totalSpent > totalBudget ? 'text-rose-500' : 'text-[var(--text)]')}>
               {fmt.currency(totalSpent, currency)}
             </p>
           </div>
-          <div className="card">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Disponible</p>
-            <p className={clsx('text-display font-bold text-lg text-mono', totalBudget - totalSpent < 0 ? 'text-rose-500' : 'text-green-500')}>
+          <div className="card !p-3 sm:!p-4">
+            <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Disponible</p>
+            <p className={clsx('text-display font-bold text-sm sm:text-lg text-mono truncate', totalBudget - totalSpent < 0 ? 'text-rose-500' : 'text-green-500')}>
               {fmt.currency(totalBudget - totalSpent, currency)}
             </p>
           </div>
@@ -171,21 +171,25 @@ export default function Budget() {
             const barColor = over ? '#ef4444' : warning ? '#f59e0b' : item.color || '#6366f1';
             return (
               <div key={item.category_id}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color || '#6366f1' }} />
-                    <span className="text-sm font-medium truncate">{item.category_name}</span>
-                    {over    && <span className="text-[10px] font-semibold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded ml-1">Excedido</span>}
-                    {warning && <span className="text-[10px] font-semibold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded ml-1">+90%</span>}
+                <div className="flex items-start justify-between mb-1.5 gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: item.color || '#6366f1' }} />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="text-sm font-medium truncate">{item.category_name}</span>
+                        {over    && <span className="text-[10px] font-semibold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded">Excedido</span>}
+                        {warning && <span className="text-[10px] font-semibold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded">+90%</span>}
+                      </div>
+                      <span className="text-xs text-mono text-[var(--text-muted)]">
+                        {fmt.currency(item.spent, currency)} / {fmt.currency(item.budget, currency)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-mono text-[var(--text-muted)]">
-                      {fmt.currency(item.spent, currency)} / {fmt.currency(item.budget, currency)}
-                    </span>
-                    <button onClick={() => openEdit(item)} className="p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-700">
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => openEdit(item)} className="p-1.5 rounded hover:bg-surface-100 dark:hover:bg-surface-700">
                       <Pencil size={12} className="text-[var(--text-muted)]" />
                     </button>
-                    <button onClick={() => setDelItem(item)} className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20">
+                    <button onClick={() => setDelItem(item)} className="p-1.5 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20">
                       <Trash2 size={12} className="text-rose-400" />
                     </button>
                   </div>

@@ -216,10 +216,10 @@ export default function Transactions() {
         </div>
         <div className="flex gap-2">
           <button onClick={exportCsv} className="btn-ghost hidden sm:flex"><Download size={15} /> Exportar</button>
-          <button onClick={openRecurring} className="btn-ghost"><RefreshCw size={15} /> Recurrentes</button>
-          <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost"><Filter size={15} /> Filtros</button>
+          <button onClick={openRecurring} className="btn-ghost"><RefreshCw size={15} /><span className="hidden sm:inline">Recurrentes</span></button>
+          <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost"><Filter size={15} /><span className="hidden sm:inline">Filtros</span></button>
           <button onClick={() => setOcrModal(true)} className="btn-ghost" title="Escanear recibo"><ScanLine size={15} /></button>
-          <button onClick={openCreate} className="btn-primary"><Plus size={15} /> Nueva</button>
+          <button onClick={openCreate} className="btn-primary"><Plus size={15} /><span className="hidden sm:inline">Nueva</span></button>
         </div>
       </div>
 
@@ -324,7 +324,7 @@ export default function Transactions() {
                     <span className={clsx('text-sm text-mono font-semibold', t.type === 'income' ? 'text-income' : 'text-expense')}>
                       {t.type === 'income' ? '+' : '-'}{fmt.currency(t.amount, currency)}
                     </span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => openEdit(t)} className="p-1 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700">
                         <Pencil size={13} className="text-[var(--text-muted)]" />
                       </button>

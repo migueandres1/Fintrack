@@ -8,14 +8,14 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={clsx('relative w-full bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]', widths[size])}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+      <div className={clsx('relative w-full bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)] flex flex-col max-h-[calc(100vh-2rem)]', widths[size])}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
           <h2 className="text-display font-bold text-base">{title}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
             <X size={16} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );
