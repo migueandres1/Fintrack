@@ -6,7 +6,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
   if (!open) return null;
   const widths = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 overflow-hidden">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className={clsx(
         'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
@@ -19,7 +19,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
             <X size={16} />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto flex-1 min-h-0">{children}</div>
+        <div className="p-5 overflow-y-auto flex-1 min-h-0 overscroll-contain">{children}</div>
       </div>
     </div>
   );
