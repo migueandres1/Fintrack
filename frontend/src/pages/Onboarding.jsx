@@ -4,6 +4,7 @@ import {
   TrendingUp, LayoutDashboard, ArrowLeftRight, Wallet,
   PiggyBank, Calendar, CreditCard, Check, ChevronRight,
   ChevronLeft, Plus, Landmark, BarChart2,
+  Crown, Users, Zap, ArrowRight,
 } from 'lucide-react';
 import { useStore } from '../store/index.js';
 import api from '../services/api.js';
@@ -749,14 +750,139 @@ function StepCards({ onNext, onPrev }) {
             added.length > 0 ? 'btn-primary justify-center' : 'border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'
           }`}
         >
-          {added.length > 0 ? <>Finalizar configuración <ChevronRight size={15} /></> : 'Omitir por ahora'}
+          {added.length > 0 ? <>Siguiente <ChevronRight size={15} /></> : 'Omitir por ahora'}
         </button>
       </div>
     </div>
   );
 }
 
-// ── Step 7: ¡Listo! ────────────────────────────────────────────────────────
+// ── Step 7: Elegir plan ────────────────────────────────────────────────────
+function StepPlan({ onSkip, onPaidSelect, busy }) {
+  const [billing, setBilling] = useState('monthly');
+
+  const PLANS = [
+    {
+      key: null,
+      label: 'Free',
+      icon: null,
+      price: { monthly: 'Gratis', annual: 'Gratis' },
+      color: 'border-[var(--border)]',
+      badge: null,
+      features: ['2 cuentas bancarias', '1 tarjeta de crédito', '50 transacciones / mes', '1 meta de ahorro'],
+    },
+    {
+      key: 'pro',
+      label: 'Pro',
+      icon: Crown,
+      price: { monthly: '$4.99/mes', annual: '$3.99/mes' },
+      color: 'border-indigo-500/40 bg-indigo-50 dark:bg-indigo-500/5',
+      badge: 'Más popular',
+      badgeColor: 'bg-indigo-600 text-white',
+      features: ['Todo ilimitado', 'OCR de recibos con IA', 'Control de deudas y amortización', 'Planificación financiera'],
+    },
+    {
+      key: 'familia',
+      label: 'Familia',
+      icon: Users,
+      price: { monthly: '$7.99/mes', annual: '$5.99/mes' },
+      color: 'border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/5',
+      badge: null,
+      features: ['Todo lo de Pro', 'Hasta 5 miembros', 'Presupuesto familiar compartido', 'Reportes por miembro'],
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="text-center">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-500 text-xs font-medium mb-3">
+          <Zap size={12} /> Último paso
+        </div>
+        <h2 className="text-display font-bold text-xl">Elige tu plan</h2>
+        <p className="text-[var(--text-muted)] text-sm mt-1">
+          Puedes cambiar o cancelar en cualquier momento.
+        </p>
+      </div>
+
+      {/* Toggle mensual / anual */}
+      <div className="flex items-center justify-center">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-[var(--surface-2)] text-sm">
+          <button
+            onClick={() => setBilling('monthly')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${billing === 'monthly' ? 'bg-[var(--bg-card)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+          >
+            Mensual
+          </button>
+          <button
+            onClick={() => setBilling('annual')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${billing === 'annual' ? 'bg-[var(--bg-card)] text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}
+          >
+            Anual
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">−20%</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tarjetas de planes */}
+      <div className="flex flex-col gap-3">
+        {PLANS.map((plan) => {
+          const Icon = plan.icon;
+          const isPaid = !!plan.key;
+          return (
+            <div
+              key={plan.label}
+              className={`relative p-4 rounded-2xl border transition-all ${plan.color}`}
+            >
+              {plan.badge && (
+                <span className={`absolute -top-2.5 left-4 px-2.5 py-0.5 rounded-full text-xs font-bold ${plan.badgeColor}`}>
+                  {plan.badge}
+                </span>
+              )}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  {Icon && <Icon size={16} className={isPaid && plan.key === 'pro' ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'} />}
+                  <span className="font-bold text-[var(--text)]">{plan.label}</span>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-[var(--text)] text-sm">{plan.price[billing]}</p>
+                  {isPaid && billing === 'annual' && (
+                    <p className="text-xs text-[var(--text-muted)]">facturado anualmente</p>
+                  )}
+                </div>
+              </div>
+              <ul className="flex flex-col gap-1 mb-3">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <Check size={11} className="text-emerald-500 shrink-0" /> {f}
+                  </li>
+                ))}
+              </ul>
+              {isPaid ? (
+                <button
+                  onClick={() => onPaidSelect(`${plan.key}_${billing}`)}
+                  disabled={busy}
+                  className="w-full py-2 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-60"
+                >
+                  {busy ? 'Redirigiendo...' : <>Empezar 30 días gratis <ArrowRight size={13} /></>}
+                </button>
+              ) : (
+                <button
+                  onClick={onSkip}
+                  disabled={busy}
+                  className="w-full py-2 rounded-xl text-sm font-medium border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)] transition-colors disabled:opacity-60"
+                >
+                  Continuar con Free
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Step 8: ¡Listo! ────────────────────────────────────────────────────────
 function StepDone({ onFinish, busy }) {
   return (
     <div className="flex flex-col items-center text-center gap-6">
@@ -790,12 +916,13 @@ function StepDone({ onFinish, busy }) {
 }
 
 // ── Wizard principal ───────────────────────────────────────────────────────
-// Steps: 0=Welcome, 1=Perfil, 2=Cuentas, 3=Ingresos, 4=Deudas, 5=Metas, 6=Tarjetas, 7=Done
+// Steps: 0=Welcome, 1=Perfil, 2=Cuentas, 3=Ingresos, 4=Deudas, 5=Metas, 6=Tarjetas, 7=Plan, 8=Done
 const STEP_LABELS = ['Perfil', 'Cuentas', 'Ingresos', 'Deudas', 'Metas', 'Tarjetas'];
 
 export default function Onboarding() {
   const user               = useStore((s) => s.user);
   const completeOnboarding = useStore((s) => s.completeOnboarding);
+  const startCheckout      = useStore((s) => s.startCheckout);
   const navigate           = useNavigate();
   const [step, setStep]    = useState(0);
   const [busy, setBusy]    = useState(false);
@@ -804,6 +931,29 @@ export default function Onboarding() {
   const prev = () => setStep((s) => Math.max(0, s - 1));
 
   const finish = async () => {
+    setBusy(true);
+    try {
+      await completeOnboarding();
+      navigate('/');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // User chose a paid plan: complete onboarding then redirect to Stripe
+  const handlePaidSelect = async (priceKey) => {
+    setBusy(true);
+    try {
+      await completeOnboarding();
+      const url = await startCheckout(priceKey);
+      if (url) window.location.href = url;
+    } catch {
+      setBusy(false);
+    }
+  };
+
+  // User chose Free: complete onboarding and go to dashboard
+  const handleSkipPlan = async () => {
     setBusy(true);
     try {
       await completeOnboarding();
@@ -844,7 +994,8 @@ export default function Onboarding() {
           {step === 4 && <StepDebts     onNext={next} onPrev={prev} />}
           {step === 5 && <StepSavings   onNext={next} onPrev={prev} />}
           {step === 6 && <StepCards     onNext={next} onPrev={prev} />}
-          {step === 7 && <StepDone      onFinish={finish} busy={busy} />}
+          {step === 7 && <StepPlan      onSkip={handleSkipPlan} onPaidSelect={handlePaidSelect} busy={busy} />}
+          {step === 8 && <StepDone      onFinish={finish} busy={busy} />}
         </div>
 
       </div>

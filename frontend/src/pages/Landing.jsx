@@ -71,7 +71,7 @@ const SOLUTIONS = [
 
 export default function Landing() {
   const token = useStore((s) => s.token);
-  const user  = useStore((s) => s.user);
+  const user = useStore((s) => s.user);
   if (token && user?.onboarding_completed !== 0) return <Navigate to="/app" replace />;
 
   return (
@@ -115,9 +115,9 @@ export default function Landing() {
 
         <div className="max-w-3xl mx-auto">
           {/* Gancho emocional */}
-          <p className="text-rose-400 font-semibold text-base mb-6 tracking-wide uppercase text-sm">
+          {/* <p className="text-rose-400 font-semibold text-base mb-6 tracking-wide uppercase text-sm">
             Te lo pregunto en serio
-          </p>
+          </p> */}
 
           <h1 className="text-5xl lg:text-6xl font-black leading-[1.08] tracking-tight mb-6">
             ¿Sabes exactamente<br />
@@ -368,7 +368,7 @@ export default function Landing() {
             Gestión financiera personal &middot; Todos los derechos reservados
           </p>
           <div className="flex items-center gap-4 text-xs text-white/30">
-            <Link to="/login"    className="hover:text-white/60 transition-colors">Iniciar sesión</Link>
+            <Link to="/login" className="hover:text-white/60 transition-colors">Iniciar sesión</Link>
             <Link to="/register" className="hover:text-white/60 transition-colors">Registrarse</Link>
           </div>
         </div>
