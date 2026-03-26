@@ -9,7 +9,7 @@ git pull
 
 echo "==> Installing frontend dependencies..."
 cd "$PROJECT_DIR/frontend"
-npm install
+npm ci
 
 echo "==> Building frontend..."
 npm run build
@@ -17,7 +17,7 @@ chmod -R 755 "$PROJECT_DIR/frontend/dist"
 
 echo "==> Installing backend dependencies..."
 cd "$PROJECT_DIR/backend"
-npm install --production
+npm ci --omit=dev
 
 echo "==> Restarting backend..."
 pm2 restart fintrack-api
