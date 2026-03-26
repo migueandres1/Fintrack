@@ -251,9 +251,13 @@ export async function handleWebhook(req, res) {
       const status = obj.status; // active | trialing | past_due | canceled
 
       if (['active', 'trialing'].includes(status)) {
+        // Solo guardar trial_ends_at si el trial sigue activo (fecha futura)
+        const trialEnd = obj.trial_end && new Date(obj.trial_end * 1000) > new Date()
+          ? new Date(obj.trial_end * 1000)
+          : null;
         await pool.query(
           'UPDATE users SET plan = ?, subscription_status = ?, trial_ends_at = ? WHERE id = ?',
-          [plan, status, obj.trial_end ? new Date(obj.trial_end * 1000) : null, userId]
+          [plan, status, trialEnd, userId]
         );
       } else {
         // past_due, unpaid, canceled, paused → degradar a free
@@ -275,13 +279,17 @@ export async function handleWebhook(req, res) {
       }
     }
 
-    // ── Pago exitoso (trial → active) ──────────────────────────────────
+    // ── Pago exitoso (trial → active o renovación) ─────────────────────
     if (type === 'invoice.paid') {
       const userId = await userIdFromCustomer(obj.customer);
       if (userId && obj.subscription) {
+        // Recuperar el plan desde la suscripción para restaurarlo si fue degradado a free
+        const sub  = await stripe.subscriptions.retrieve(obj.subscription);
+        const plan = planFromPriceId(sub.items.data[0]?.price?.id);
+        // Limpiar trial_ends_at: el pago confirma que el trial terminó y está activo
         await pool.query(
-          'UPDATE users SET subscription_status = ? WHERE stripe_subscription_id = ? AND id = ?',
-          ['active', obj.subscription, userId]
+          'UPDATE users SET subscription_status = ?, plan = ?, trial_ends_at = NULL, stripe_subscription_id = ? WHERE id = ?',
+          ['active', plan, obj.subscription, userId]
         );
       }
     }
