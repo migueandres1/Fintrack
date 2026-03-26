@@ -83,6 +83,52 @@ export const useStore = create(
         set({ categories: data });
       },
 
+      // ── Categories management ──────────────────────────
+      allCategories: [],
+      catsLoading: false,
+
+      fetchAllCategories: async () => {
+        set({ catsLoading: true });
+        try {
+          const { data } = await api.get('/categories/manage');
+          set({ allCategories: data });
+        } finally {
+          set({ catsLoading: false });
+        }
+      },
+
+      createCategory: async (payload) => {
+        const { data } = await api.post('/categories', payload);
+        set((s) => ({ allCategories: [...s.allCategories, data] }));
+        return data;
+      },
+
+      updateCategory: async (id, payload) => {
+        await api.put(`/categories/${id}`, payload);
+        set((s) => ({
+          allCategories: s.allCategories.map(c => c.id === id ? { ...c, ...payload } : c),
+        }));
+      },
+
+      deleteCategory: async (id) => {
+        await api.delete(`/categories/${id}`);
+        set((s) => ({ allCategories: s.allCategories.filter(c => c.id !== id) }));
+      },
+
+      hideCategory: async (id) => {
+        await api.post(`/categories/${id}/hide`);
+        set((s) => ({
+          allCategories: s.allCategories.map(c => c.id === id ? { ...c, is_hidden: 1 } : c),
+        }));
+      },
+
+      unhideCategory: async (id) => {
+        await api.delete(`/categories/${id}/hide`);
+        set((s) => ({
+          allCategories: s.allCategories.map(c => c.id === id ? { ...c, is_hidden: 0 } : c),
+        }));
+      },
+
       createTransaction: async (payload) => {
         const { data } = await api.post('/transactions', payload);
         return data;

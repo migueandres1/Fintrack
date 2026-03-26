@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ArrowRightLeft, CreditCard,
   PiggyBank, Moon, Sun, LogOut, TrendingUp,
   CalendarRange, Wallet, BarChart2, Landmark,
-  MoreHorizontal, User,
+  MoreHorizontal, User, Tags,
 } from 'lucide-react';
 import { useStore } from '../../store/index.js';
 import clsx        from 'clsx';
@@ -19,6 +19,7 @@ const NAV = [
   { to: '/savings',      icon: PiggyBank,       label: 'Metas de ahorro' },
   { to: '/budget',       icon: BarChart2,       label: 'Presupuesto' },
   { to: '/planning',     icon: CalendarRange,   label: 'Planificación' },
+  { to: '/categories',   icon: Tags,            label: 'Categorías' },
 ];
 
 // ── Bottom tab bar (mobile): 4 tabs principales + "Más" ───────────────────
@@ -33,6 +34,7 @@ const MORE_ITEMS = [
   { to: '/credit-cards', icon: CreditCard,    label: 'Tarjetas' },
   { to: '/savings',      icon: PiggyBank,     label: 'Metas de ahorro' },
   { to: '/planning',     icon: CalendarRange, label: 'Planificación' },
+  { to: '/categories',   icon: Tags,          label: 'Categorías' },
 ];
 
 // ── Sidebar desktop ────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import * as cards        from '../controllers/credit_cards.controller.js';
 import * as budgets      from '../controllers/budgets.controller.js';
 import * as accounts     from '../controllers/accounts.controller.js';
 import * as ocr          from '../controllers/ocr.controller.js';
+import * as cats         from '../controllers/categories.controller.js';
 
 // Multer: memoria, solo imágenes y PDF, máx 10 MB
 const upload = multer({
@@ -43,7 +44,14 @@ r.put ('/transactions/:id',      authenticate, txn.update);
 r.delete('/transactions/:id',    authenticate, txn.remove);
 r.get ('/transactions/summary',  authenticate, txn.summary);
 r.get ('/transactions/export',   authenticate, txn.exportCsv);
-r.get ('/categories',            authenticate, txn.getCategories);
+// Categories
+r.get   ('/categories',          authenticate, cats.listVisible);
+r.get   ('/categories/manage',   authenticate, cats.listAll);
+r.post  ('/categories',          authenticate, cats.create);
+r.put   ('/categories/:id',      authenticate, cats.update);
+r.delete('/categories/:id',      authenticate, cats.remove);
+r.post  ('/categories/:id/hide', authenticate, cats.hide);
+r.delete('/categories/:id/hide', authenticate, cats.unhide);
 
 // Debts
 r.get   ('/debts',                authenticate, debts.list);
