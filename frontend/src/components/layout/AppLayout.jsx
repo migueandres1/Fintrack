@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ArrowRightLeft, CreditCard,
   PiggyBank, Moon, Sun, LogOut, TrendingUp,
   CalendarRange, Wallet, BarChart2, Landmark,
-  MoreHorizontal, User, Tags,
+  MoreHorizontal, User, Tags, BookOpen, FileCode2,
 } from 'lucide-react';
 import { useStore } from '../../store/index.js';
 import clsx        from 'clsx';
@@ -22,6 +22,11 @@ const NAV = [
   { to: '/categories',   icon: Tags,            label: 'Categorías' },
 ];
 
+const DOCS_NAV = [
+  { to: '/guide',     icon: BookOpen,   label: 'Guía de usuario' },
+  { to: '/tech-docs', icon: FileCode2,  label: 'Docs técnica' },
+];
+
 // ── Bottom tab bar (mobile): 4 tabs principales + "Más" ───────────────────
 const BOTTOM_TABS = [
   { to: '/',             icon: LayoutDashboard, label: 'Inicio' },
@@ -35,6 +40,8 @@ const MORE_ITEMS = [
   { to: '/savings',      icon: PiggyBank,     label: 'Metas de ahorro' },
   { to: '/planning',     icon: CalendarRange, label: 'Planificación' },
   { to: '/categories',   icon: Tags,          label: 'Categorías' },
+  { to: '/guide',        icon: BookOpen,      label: 'Guía' },
+  { to: '/tech-docs',    icon: FileCode2,     label: 'Docs técnica' },
 ];
 
 // ── Sidebar desktop ────────────────────────────────────────────────────────
@@ -91,7 +98,27 @@ function Sidebar({ onLogout, user, darkMode, toggleDark }) {
         ))}
       </nav>
 
-      <div className="mt-auto pt-4 border-t border-white/5 flex flex-col gap-2">
+      <div className="pt-3 border-t border-white/5 flex flex-col gap-1">
+        {DOCS_NAV.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              clsx(
+                'flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium transition-all',
+                isActive
+                  ? 'bg-brand-500/15 text-brand-400'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+              )
+            }
+          >
+            <Icon size={15} />
+            {label}
+          </NavLink>
+        ))}
+      </div>
+
+      <div className="mt-2 pt-3 border-t border-white/5 flex flex-col gap-2">
         <button
           onClick={toggleDark}
           className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all"
@@ -114,7 +141,7 @@ function BottomTabBar({ moreOpen, setMoreOpen }) {
   return (
     <nav
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--sidebar-bg)] border-t border-white/8 flex items-stretch"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 6px)' }}
     >
       {BOTTOM_TABS.map(({ to, icon: Icon, label }) => (
         <NavLink
@@ -166,7 +193,7 @@ function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div
         className="relative bg-[var(--bg-card)] rounded-t-2xl animate-fade-up"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.5rem)' }}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
@@ -262,7 +289,10 @@ export default function AppLayout() {
         </div>
 
         {/* Contenido — pb-24 en mobile para no quedar bajo el tab bar */}
-        <div className="flex-1 p-4 lg:p-6 pb-24 lg:pb-6 max-w-7xl mx-auto w-full">
+        <div
+          className="flex-1 p-4 lg:p-6 lg:pb-6 max-w-7xl mx-auto w-full"
+          style={{ paddingBottom: 'max(6rem, calc(4rem + env(safe-area-inset-bottom)))' }}
+        >
           <Outlet />
         </div>
       </main>
