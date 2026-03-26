@@ -33,15 +33,18 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, 
   })();
   const neededPerMonth = monthsLeft ? (remaining / monthsLeft).toFixed(2) : null;
 
-  const loadDetail = async (force = false) => {
-    if (force || (!expanded && !detail)) {
+  const loadDetail = async () => {
+    if (!expanded && !detail) {
       const { data } = await api.get(`/savings/${goal.id}`);
       setDetail(data);
     }
-    if (!force) setExpanded(!expanded);
+    setExpanded(v => !v);
   };
 
-  const refreshDetail = () => loadDetail(true);
+  const refreshDetail = async () => {
+    const { data } = await api.get(`/savings/${goal.id}`);
+    setDetail(data);
+  };
 
   return (
     <div className={clsx('card transition-all', goal.is_completed && 'ring-1 ring-green-500/40')}>
@@ -146,7 +149,7 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, 
                     </td>
                     <td className="pl-3 text-[var(--text-muted)]">{c.notes || '—'}</td>
                     <td className="pl-2 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => onEditContrib(c, goal.id, refreshDetail)}
                           className="p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-700">
