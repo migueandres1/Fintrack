@@ -102,6 +102,8 @@ r.get   ('/accounts/:id/transactions',     authenticate, accounts.getTransaction
 r.get   ('/budgets',                              authenticate, budgets.list);
 r.put   ('/budgets',                              authenticate, budgets.upsert);
 r.post  ('/budgets/copy',                         authenticate, budgets.copyFromLastMonth);
+r.post  ('/budgets/income',                       authenticate, budgets.addPlannedIncome);
+r.delete('/budgets/income/:id',                   authenticate, budgets.removePlannedIncome);
 r.get   ('/budgets/:categoryId/transactions',     authenticate, budgets.categoryDetail);
 r.delete('/budgets/:categoryId',                  authenticate, budgets.remove);
 

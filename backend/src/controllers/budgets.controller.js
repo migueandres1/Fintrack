@@ -53,14 +53,14 @@ export async function list(req, res) {
 
     // ── Recurring monthly expenses active this month ──────────────
     const [recurring] = await pool.query(
-      `SELECT r.id, r.description, r.amount, r.frequency, r.category_id,
+      `SELECT r.id, r.description, r.amount, r.frequency, r.category_id, r.type,
               c.name AS category_name, c.color, c.icon
        FROM recurring_transactions r
        JOIN categories c ON c.id = r.category_id
-       WHERE r.user_id = ? AND r.is_active = 1 AND r.type = 'expense'
+       WHERE r.user_id = ? AND r.is_active = 1
          AND r.start_date <= LAST_DAY(?)
          AND (r.end_date IS NULL OR r.end_date >= ?)
-       ORDER BY r.amount DESC`,
+       ORDER BY r.type, r.amount DESC`,
       [uid, monthStart, monthStart]
     );
 
@@ -96,7 +96,13 @@ export async function list(req, res) {
       return { ...g, monthly_needed: monthly };
     });
 
-    res.json({ month, items, categories, recurring, debts, goals: goalsWithMonthly });
+    // ── Planned one-time income for the month ─────────────────────
+    const [plannedIncome] = await pool.query(
+      'SELECT id, description, amount FROM budget_planned_income WHERE user_id = ? AND month = ? ORDER BY created_at',
+      [uid, month]
+    );
+
+    res.json({ month, items, categories, recurring, debts, goals: goalsWithMonthly, planned_income: plannedIncome });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
@@ -159,6 +165,35 @@ export async function remove(req, res) {
       'DELETE FROM budgets WHERE user_id = ? AND category_id = ? AND month = ?',
       [uid, categoryId, month]
     );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+}
+
+// POST /budgets/income
+export async function addPlannedIncome(req, res) {
+  const uid = req.userId;
+  const { month, description, amount } = req.body;
+  if (!month || !amount) return res.status(400).json({ error: 'month y amount son requeridos' });
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO budget_planned_income (user_id, month, description, amount) VALUES (?,?,?,?)',
+      [uid, month, description || 'Ingreso', amount]
+    );
+    res.status(201).json({ id: result.insertId, description: description || 'Ingreso', amount: +amount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error interno' });
+  }
+}
+
+// DELETE /budgets/income/:id
+export async function removePlannedIncome(req, res) {
+  const uid = req.userId;
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM budget_planned_income WHERE id = ? AND user_id = ?', [id, uid]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });

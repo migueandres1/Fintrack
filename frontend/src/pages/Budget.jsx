@@ -5,7 +5,7 @@ import { fmt }       from '../utils/format.js';
 import { Modal, Confirm, Spinner } from '../components/ui/index.jsx';
 import clsx from 'clsx';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function monthLabel(month) {
   const [y, m] = month.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString('es', { month: 'long', year: 'numeric' });
@@ -29,7 +29,6 @@ function LucideIcon({ name, size = 15, style, className }) {
   const Icon = LucideIcons[toPascal(name)] || LucideIcons.Tag;
   return <Icon size={size} style={style} className={className} />;
 }
-
 const FREQ_LABEL = { weekly: 'Semanal', biweekly: 'Quincenal', monthly: 'Mensual', yearly: 'Anual' };
 
 // ── Category detail modal ─────────────────────────────────────────────────────
@@ -42,8 +41,7 @@ function CategoryDetailModal({ open, onClose, item, month, currency }) {
     if (!open || !item) return;
     setLoading(true);
     fetchBudgetCategoryDetail(item.category_id, month)
-      .then(setTxns)
-      .finally(() => setLoading(false));
+      .then(setTxns).finally(() => setLoading(false));
   }, [open, item?.category_id, month]);
 
   const total = txns.reduce((s, t) => s + Number(t.amount), 0);
@@ -52,7 +50,6 @@ function CategoryDetailModal({ open, onClose, item, month, currency }) {
     <Modal open={open} onClose={onClose} title={item?.category_name || ''} size="md">
       {loading ? <Spinner /> : (
         <div className="space-y-3">
-          {/* Summary bar */}
           {item && (
             <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)]">
               <div>
@@ -72,8 +69,6 @@ function CategoryDetailModal({ open, onClose, item, month, currency }) {
               )}
             </div>
           )}
-
-          {/* Transaction list */}
           {txns.length === 0 ? (
             <p className="text-sm text-center text-[var(--text-muted)] py-6">Sin transacciones este mes</p>
           ) : (
@@ -94,7 +89,6 @@ function CategoryDetailModal({ open, onClose, item, month, currency }) {
               ))}
             </div>
           )}
-
           {txns.length > 1 && (
             <div className="flex justify-between items-center pt-2 border-t border-[var(--border)] text-sm font-semibold">
               <span>{txns.length} transacciones</span>
@@ -107,61 +101,119 @@ function CategoryDetailModal({ open, onClose, item, month, currency }) {
   );
 }
 
+// ── Import debt modal ─────────────────────────────────────────────────────────
+function ImportDebtModal({ open, onClose, debt, categories, onImport }) {
+  const [catId, setCatId] = useState('');
+  const [amount, setAmount] = useState('');
+
+  useEffect(() => {
+    if (open && debt) {
+      setAmount(String(debt.monthly_payment));
+      // Pre-select "Deuda" category if exists
+      const debtCat = categories.find(c => /deuda/i.test(c.name));
+      setCatId(debtCat ? String(debtCat.id) : '');
+    }
+  }, [open, debt]);
+
+  const handleImport = () => {
+    if (!catId || !amount) return;
+    onImport({ category_id: Number(catId), amount: Number(amount) });
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Agregar al presupuesto`} size="sm">
+      <div className="space-y-4">
+        <p className="text-sm text-[var(--text-muted)]">Cuota de <span className="font-medium text-[var(--text)]">{debt?.name}</span></p>
+        <div>
+          <label className="label">Categoría</label>
+          <select className="input" value={catId} onChange={e => setCatId(e.target.value)}>
+            <option value="">Seleccionar...</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Monto</label>
+          <input className="input" type="number" step="0.01" min="0.01"
+            value={amount} onChange={e => setAmount(e.target.value)} />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose} className="btn-ghost flex-1 justify-center">Cancelar</button>
+          <button type="button" onClick={handleImport} disabled={!catId || !amount}
+            className="btn-primary flex-1 justify-center">Agregar</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Budget() {
   const {
     budgets, budgetsLoading, fetchBudgets, saveBudget, deleteBudget,
-    copyBudgetsFromLastMonth, user,
+    copyBudgetsFromLastMonth, addPlannedIncome, removePlannedIncome, addContribution, user,
   } = useStore();
   const currency = user?.currency || 'USD';
 
-  const [month,      setMonth]      = useState(currentYearMonth());
-  const [modal,      setModal]      = useState(false);
-  const [editItem,   setEditItem]   = useState(null);
-  const [delItem,    setDelItem]    = useState(null);
-  const [detailItem, setDetailItem] = useState(null);
-  const [amount,     setAmount]     = useState('');
-  const [newCatId,   setNewCatId]   = useState('');
-  const [busy,       setBusy]       = useState(false);
-  const [copied,     setCopied]     = useState(false);
-  const [tab,        setTab]        = useState('budgets'); // 'budgets' | 'obligations'
+  const [month,        setMonth]        = useState(currentYearMonth());
+  const [modal,        setModal]        = useState(false);
+  const [editItem,     setEditItem]     = useState(null);
+  const [delItem,      setDelItem]      = useState(null);
+  const [detailItem,   setDetailItem]   = useState(null);
+  const [importDebt,   setImportDebt]   = useState(null); // debt object
+  const [incomeModal,  setIncomeModal]  = useState(false);
+  const [incomeForm,   setIncomeForm]   = useState({ description: '', amount: '' });
+  const [contribGoal,  setContribGoal]  = useState(null);
+  const [contribForm,  setContribForm]  = useState({ amount: '', contrib_date: '', notes: '' });
+  const [amount,       setAmount]       = useState('');
+  const [newCatId,     setNewCatId]     = useState('');
+  const [busy,         setBusy]         = useState(false);
+  const [copied,       setCopied]       = useState(false);
+  const [tab,          setTab]          = useState('budgets');
 
   useEffect(() => { fetchBudgets(month); }, [month]);
 
-  const items      = budgets?.items      || [];
-  const categories = budgets?.categories || [];
-  const recurring  = budgets?.recurring  || [];
-  const debts      = budgets?.debts      || [];
-  const goals      = budgets?.goals      || [];
+  const items         = budgets?.items         || [];
+  const categories    = budgets?.categories    || [];
+  const recurring     = budgets?.recurring     || [];
+  const debts         = budgets?.debts         || [];
+  const goals         = budgets?.goals         || [];
+  const plannedIncome = budgets?.planned_income || [];
+
+  const recurringExpense = recurring.filter(r => r.type === 'expense');
+  const recurringIncome  = recurring.filter(r => r.type === 'income');
+
   const unbudgeted = categories.filter(c => !items.find(i => i.category_id === c.id));
 
   const totalBudget = items.reduce((s, i) => s + (i.budget || 0), 0);
   const totalSpent  = items.reduce((s, i) => s + (i.spent  || 0), 0);
 
-  // Total de compromisos fijos del mes
+  const totalPlannedIncome =
+    recurringIncome.reduce((s, r)  => s + Number(r.amount), 0) +
+    plannedIncome.reduce((s, p)    => s + Number(p.amount), 0);
+
   const totalObligations =
-    recurring.reduce((s, r) => s + Number(r.amount), 0) +
-    debts.reduce((s, d)    => s + Number(d.monthly_payment), 0) +
+    recurringExpense.reduce((s, r) => s + Number(r.amount), 0) +
+    debts.reduce((s, d)            => s + Number(d.monthly_payment), 0) +
     goals.filter(g => g.monthly_needed).reduce((s, g) => s + g.monthly_needed, 0);
 
-  const openAdd = () => { setEditItem(null); setAmount(''); setNewCatId(''); setModal(true); };
+  const projectedBalance = totalPlannedIncome - totalObligations;
+
+  const openAdd  = () => { setEditItem(null); setAmount(''); setNewCatId(''); setModal(true); };
   const openEdit = (item) => { setEditItem(item); setAmount(String(item.budget)); setModal(true); };
 
   const save = async (e) => {
-    e.preventDefault();
-    setBusy(true);
+    e.preventDefault(); setBusy(true);
     try {
       const category_id = editItem ? editItem.category_id : Number(newCatId);
       await saveBudget({ category_id, amount: Number(amount), month });
-      setModal(false);
-      fetchBudgets(month);
+      setModal(false); fetchBudgets(month);
     } finally { setBusy(false); }
   };
 
   const confirmDelete = async () => {
     await deleteBudget(delItem.category_id, month);
-    setDelItem(null);
-    fetchBudgets(month);
+    setDelItem(null); fetchBudgets(month);
   };
 
   const handleCopy = async () => {
@@ -169,14 +221,46 @@ export default function Budget() {
     try {
       await copyBudgetsFromLastMonth(month);
       fetchBudgets(month);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      setCopied(true); setTimeout(() => setCopied(false), 2500);
     } finally { setBusy(false); }
   };
 
-  // Import a recurring transaction as a budget entry
   const importRecurring = async (rec) => {
     await saveBudget({ category_id: rec.category_id, amount: Number(rec.amount), month });
+    fetchBudgets(month);
+  };
+
+  const handleImportDebt = async ({ category_id, amount }) => {
+    await saveBudget({ category_id, amount, month });
+    fetchBudgets(month);
+  };
+
+  const saveIncome = async (e) => {
+    e.preventDefault(); setBusy(true);
+    try {
+      await addPlannedIncome({ month, description: incomeForm.description || 'Ingreso', amount: Number(incomeForm.amount) });
+      setIncomeModal(false); setIncomeForm({ description: '', amount: '' });
+      fetchBudgets(month);
+    } finally { setBusy(false); }
+  };
+
+  const openContrib = (g) => {
+    const today = new Date();
+    const d = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    setContribGoal(g);
+    setContribForm({ amount: g.monthly_needed ? String(g.monthly_needed) : '', contrib_date: d, notes: '' });
+  };
+
+  const saveContrib = async (e) => {
+    e.preventDefault(); setBusy(true);
+    try {
+      await addContribution(contribGoal.id, contribForm);
+      setContribGoal(null); fetchBudgets(month);
+    } finally { setBusy(false); }
+  };
+
+  const handleRemoveIncome = async (id) => {
+    await removePlannedIncome(id);
     fetchBudgets(month);
   };
 
@@ -215,30 +299,34 @@ export default function Budget() {
       </div>
 
       {/* Summary cards */}
-      {(items.length > 0 || totalObligations > 0) && (
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <div className="card !p-3 sm:!p-4">
-            <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Presupuestado</p>
-            <p className="text-display font-bold text-sm sm:text-lg text-mono truncate">{fmt.currency(totalBudget, currency)}</p>
-          </div>
-          <div className="card !p-3 sm:!p-4">
-            <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Gastado</p>
-            <p className={clsx('text-display font-bold text-sm sm:text-lg text-mono truncate', totalSpent > totalBudget ? 'text-rose-500' : '')}>
-              {fmt.currency(totalSpent, currency)}
-            </p>
-          </div>
-          <div className="card !p-3 sm:!p-4">
-            <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Disponible</p>
-            <p className={clsx('text-display font-bold text-sm sm:text-lg text-mono truncate', totalBudget - totalSpent < 0 ? 'text-rose-500' : 'text-green-500')}>
-              {fmt.currency(totalBudget - totalSpent, currency)}
-            </p>
-          </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <div className="card !p-3 sm:!p-4">
+          <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Presupuestado</p>
+          <p className="text-display font-bold text-sm sm:text-base text-mono truncate">{fmt.currency(totalBudget, currency)}</p>
         </div>
-      )}
+        <div className="card !p-3 sm:!p-4">
+          <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Gastado</p>
+          <p className={clsx('text-display font-bold text-sm sm:text-base text-mono truncate', totalSpent > totalBudget && totalBudget > 0 ? 'text-rose-500' : '')}>
+            {fmt.currency(totalSpent, currency)}
+          </p>
+        </div>
+        <div className="card !p-3 sm:!p-4">
+          <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Ingresos planif.</p>
+          <p className="text-display font-bold text-sm sm:text-base text-mono truncate text-green-500">
+            {fmt.currency(totalPlannedIncome, currency)}
+          </p>
+        </div>
+        <div className="card !p-3 sm:!p-4">
+          <p className="text-[10px] sm:text-xs text-[var(--text-muted)] mb-1 leading-tight">Balance proy.</p>
+          <p className={clsx('text-display font-bold text-sm sm:text-base text-mono truncate', projectedBalance >= 0 ? 'text-green-500' : 'text-rose-500')}>
+            {fmt.currency(projectedBalance, currency)}
+          </p>
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-surface-100 dark:bg-surface-800 rounded-xl w-fit">
-        {[['budgets', 'Presupuesto'], ['obligations', `Compromisos${totalObligations > 0 ? '' : ''}`]].map(([v, l]) => (
+        {[['budgets', 'Presupuesto'], ['obligations', 'Compromisos']].map(([v, l]) => (
           <button key={v} onClick={() => setTab(v)}
             className={clsx(
               'px-4 py-1.5 rounded-lg text-xs font-medium transition-all',
@@ -271,10 +359,8 @@ export default function Budget() {
               return (
                 <div key={item.category_id}>
                   <div className="flex items-start justify-between mb-1.5 gap-2">
-                    <button
-                      className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
-                      onClick={() => setDetailItem(item)}
-                    >
+                    <button className="flex items-center gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
+                      onClick={() => setDetailItem(item)}>
                       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style={{ background: item.color || '#6366f1' }} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1 flex-wrap">
@@ -309,14 +395,72 @@ export default function Budget() {
 
       {/* ── TAB: COMPROMISOS ── */}
       {tab === 'obligations' && (
-        <div className="space-y-4">
+        <div className="space-y-5">
 
-          {/* Transacciones recurrentes */}
-          {recurring.length > 0 && (
+          {/* Ingresos recurrentes */}
+          {(recurringIncome.length > 0 || plannedIncome.length > 0) && (
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">Recurrentes</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Ingresos del mes</h2>
+                <button onClick={() => setIncomeModal(true)}
+                  className="flex items-center gap-1 text-xs text-brand-500 hover:text-brand-400 transition-colors">
+                  <LucideIcons.Plus size={12} /> Agregar ingreso único
+                </button>
+              </div>
               <div className="card space-y-1 !p-2">
-                {recurring.map(r => {
+                {recurringIncome.map(r => (
+                  <div key={r.id} className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors">
+                    <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: (r.color || '#22c55e') + '22' }}>
+                      <LucideIcon name={r.icon} size={14} style={{ color: r.color || '#22c55e' }} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{r.description || r.category_name}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{r.category_name} · {FREQ_LABEL[r.frequency] || r.frequency}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-mono text-green-500">{fmt.currency(r.amount, currency)}</span>
+                  </div>
+                ))}
+                {plannedIncome.map(p => (
+                  <div key={p.id} className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors">
+                    <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-green-500/10">
+                      <LucideIcons.CircleDollarSign size={14} className="text-green-500" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{p.description}</p>
+                      <p className="text-xs text-[var(--text-muted)]">Ingreso único</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold text-mono text-green-500">{fmt.currency(p.amount, currency)}</span>
+                      <button onClick={() => handleRemoveIncome(p.id)}
+                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors">
+                        <LucideIcons.Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Botón agregar ingreso si no hay ninguno aún */}
+          {recurringIncome.length === 0 && plannedIncome.length === 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Ingresos del mes</h2>
+              </div>
+              <button onClick={() => setIncomeModal(true)}
+                className="w-full card border-dashed flex items-center justify-center gap-2 py-4 text-sm text-[var(--text-muted)] hover:text-brand-500 hover:border-brand-400 transition-colors">
+                <LucideIcons.Plus size={14} /> Agregar ingreso único
+              </button>
+            </div>
+          )}
+
+          {/* Gastos recurrentes */}
+          {recurringExpense.length > 0 && (
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">Gastos recurrentes</h2>
+              <div className="card space-y-1 !p-2">
+                {recurringExpense.map(r => {
                   const alreadyBudgeted = items.some(i => i.category_id === r.category_id);
                   return (
                     <div key={r.id} className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors">
@@ -330,9 +474,7 @@ export default function Budget() {
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-sm font-semibold text-mono">{fmt.currency(r.amount, currency)}</span>
                         {!alreadyBudgeted ? (
-                          <button
-                            onClick={() => importRecurring(r)}
-                            title="Agregar al presupuesto"
+                          <button onClick={() => importRecurring(r)} title="Agregar al presupuesto"
                             className="p-1.5 rounded-lg bg-brand-500/10 text-brand-500 hover:bg-brand-500/20 transition-colors">
                             <LucideIcons.Plus size={13} />
                           </button>
@@ -363,7 +505,13 @@ export default function Budget() {
                       <p className="text-sm font-medium truncate">{d.name}</p>
                       <p className="text-xs text-[var(--text-muted)]">Saldo: {fmt.currency(d.current_balance, currency)} · Día {d.payment_day}</p>
                     </div>
-                    <span className="text-sm font-semibold text-mono text-rose-500">{fmt.currency(d.monthly_payment, currency)}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold text-mono text-rose-500">{fmt.currency(d.monthly_payment, currency)}</span>
+                      <button onClick={() => setImportDebt(d)} title="Agregar al presupuesto"
+                        className="p-1.5 rounded-lg bg-brand-500/10 text-brand-500 hover:bg-brand-500/20 transition-colors">
+                        <LucideIcons.Plus size={13} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -387,16 +535,22 @@ export default function Budget() {
                         {g.deadline && ` · ${fmt.date(g.deadline)}`}
                       </p>
                     </div>
-                    <span className="text-sm font-semibold text-mono text-brand-500">
-                      {g.monthly_needed ? fmt.currency(g.monthly_needed, currency) + '/mes' : '—'}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold text-mono text-brand-500">
+                        {g.monthly_needed ? fmt.currency(g.monthly_needed, currency) + '/mes' : '—'}
+                      </span>
+                      <button onClick={() => openContrib(g)} title="Registrar aporte"
+                        className="p-1.5 rounded-lg bg-brand-500/10 text-brand-500 hover:bg-brand-500/20 transition-colors">
+                        <LucideIcons.Plus size={13} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {recurring.length === 0 && debts.length === 0 && goals.length === 0 && (
+          {recurringExpense.length === 0 && debts.length === 0 && goals.length === 0 && (
             <div className="card flex flex-col items-center gap-3 py-10 text-center">
               <LucideIcons.CalendarCheck size={32} className="text-[var(--text-muted)] opacity-40" />
               <p className="font-semibold">Sin compromisos registrados</p>
@@ -404,26 +558,64 @@ export default function Budget() {
             </div>
           )}
 
-          {/* Resumen total compromisos */}
-          {totalObligations > 0 && (
-            <div className="card flex items-center justify-between !py-3">
-              <span className="text-sm font-semibold">Total compromisos del mes</span>
-              <span className="text-sm font-bold text-mono text-rose-500">{fmt.currency(totalObligations, currency)}</span>
+          {/* Resumen */}
+          {(totalObligations > 0 || totalPlannedIncome > 0) && (
+            <div className="card space-y-2 !py-3">
+              {totalPlannedIncome > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-muted)]">Total ingresos planificados</span>
+                  <span className="font-bold text-mono text-green-500">+{fmt.currency(totalPlannedIncome, currency)}</span>
+                </div>
+              )}
+              {totalObligations > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--text-muted)]">Total compromisos</span>
+                  <span className="font-bold text-mono text-rose-500">-{fmt.currency(totalObligations, currency)}</span>
+                </div>
+              )}
+              {totalPlannedIncome > 0 && totalObligations > 0 && (
+                <div className="flex items-center justify-between text-sm pt-2 border-t border-[var(--border)] font-semibold">
+                  <span>Balance proyectado</span>
+                  <span className={clsx('text-mono', projectedBalance >= 0 ? 'text-green-500' : 'text-rose-500')}>
+                    {fmt.currency(projectedBalance, currency)}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* Category detail modal */}
-      <CategoryDetailModal
-        open={!!detailItem}
-        onClose={() => setDetailItem(null)}
-        item={detailItem}
-        month={month}
-        currency={currency}
-      />
+      {/* Modals */}
+      <CategoryDetailModal open={!!detailItem} onClose={() => setDetailItem(null)}
+        item={detailItem} month={month} currency={currency} />
 
-      {/* Add/Edit modal */}
+      <ImportDebtModal open={!!importDebt} onClose={() => setImportDebt(null)}
+        debt={importDebt} categories={categories} onImport={handleImportDebt} />
+
+      {/* Add income modal */}
+      <Modal open={incomeModal} onClose={() => setIncomeModal(false)} title="Agregar ingreso único" size="sm">
+        <form onSubmit={saveIncome} className="space-y-4">
+          <div>
+            <label className="label">Descripción</label>
+            <input className="input" type="text" placeholder="Ej: Salario, Freelance, Bono"
+              value={incomeForm.description} onChange={e => setIncomeForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Monto</label>
+            <input className="input" type="number" step="0.01" min="0.01" placeholder="0.00"
+              value={incomeForm.amount} onChange={e => setIncomeForm(f => ({ ...f, amount: e.target.value }))} required />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={() => setIncomeModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={busy || !incomeForm.amount} className="btn-primary flex-1 justify-center">
+              {busy ? 'Guardando...' : 'Agregar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Add/Edit budget modal */}
       <Modal open={modal} onClose={() => setModal(false)} title={editItem ? `Editar – ${editItem.category_name}` : 'Agregar presupuesto'}>
         <form onSubmit={save} className="space-y-4">
           {!editItem && (
@@ -449,13 +641,42 @@ export default function Budget() {
         </form>
       </Modal>
 
-      <Confirm
-        open={!!delItem}
-        onClose={() => setDelItem(null)}
-        onConfirm={confirmDelete}
+      {/* Savings contribution modal */}
+      <Modal open={!!contribGoal} onClose={() => setContribGoal(null)}
+        title={`Aporte – ${contribGoal?.name}`} size="sm">
+        <form onSubmit={saveContrib} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Monto</label>
+              <input className="input" type="number" step="0.01" min="0.01" placeholder="0.00"
+                value={contribForm.amount}
+                onChange={e => setContribForm(f => ({ ...f, amount: e.target.value }))} required />
+            </div>
+            <div>
+              <label className="label">Fecha</label>
+              <input className="input" type="date"
+                value={contribForm.contrib_date}
+                onChange={e => setContribForm(f => ({ ...f, contrib_date: e.target.value }))} required />
+            </div>
+          </div>
+          <div>
+            <label className="label">Notas (opcional)</label>
+            <input className="input" type="text" placeholder="Ej: Ahorro mensual"
+              value={contribForm.notes}
+              onChange={e => setContribForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={() => setContribGoal(null)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={busy || !contribForm.amount} className="btn-primary flex-1 justify-center">
+              {busy ? 'Guardando...' : 'Registrar aporte'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Confirm open={!!delItem} onClose={() => setDelItem(null)} onConfirm={confirmDelete}
         title="Eliminar presupuesto"
-        message={`¿Eliminar el presupuesto de "${delItem?.category_name}" para ${monthLabel(month)}?`}
-      />
+        message={`¿Eliminar el presupuesto de "${delItem?.category_name}" para ${monthLabel(month)}?`} />
     </div>
   );
 }

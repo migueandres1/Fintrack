@@ -333,6 +333,15 @@ export const useStore = create(
         const { data } = await api.get(`/budgets/${categoryId}/transactions`, { params: { month } });
         return data;
       },
+
+      addPlannedIncome: async (payload) => {
+        const { data } = await api.post('/budgets/income', payload);
+        return data;
+      },
+
+      removePlannedIncome: async (id) => {
+        await api.delete(`/budgets/income/${id}`);
+      },
     }),
     {
       name:    'fintrack-store',
