@@ -10,7 +10,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className={clsx(
         'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
-        'max-h-[calc(100vh-5rem)]',
+        'max-h-[calc(100dvh-5rem)]',
         widths[size]
       )}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
@@ -19,7 +19,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
             <X size={16} />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto">{children}</div>
+        <div className="p-5 overflow-y-auto flex-1 min-h-0">{children}</div>
       </div>
     </div>
   );
