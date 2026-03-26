@@ -34,10 +34,32 @@ function normalizeDate(raw) {
   return null;
 }
 
-// Extrae número de un string monetario: "$1,234.56" → 1234.56
+// Extrae número de un string monetario, soportando ambos separadores decimales:
+//   "$1,234.56"  → 1234.56  (punto decimal)
+//   "Q 1.234,56" → 1234.56  (coma decimal, punto miles)
+//   "1250,00"    → 1250.00  (coma decimal sin miles)
+//   "1250.00"    → 1250.00  (punto decimal sin miles)
 function parseAmount(raw) {
   if (!raw) return null;
-  const num = parseFloat(raw.replace(/[^0-9.\-]/g, ''));
+  // Quitar símbolos de moneda y espacios, conservar dígitos, puntos, comas y signo
+  let s = raw.replace(/[^\d.,\-]/g, '').trim();
+  if (!s) return null;
+
+  const lastDot   = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(',');
+
+  if (lastDot > lastComma) {
+    // Punto es decimal: "1,234.56" → eliminar comas
+    s = s.replace(/,/g, '');
+  } else if (lastComma > lastDot) {
+    // Coma es decimal: "1.234,56" o "1250,56" → eliminar puntos, coma→punto
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // Solo un tipo de separador o ninguno: tratar coma como miles
+    s = s.replace(/,/g, '');
+  }
+
+  const num = parseFloat(s);
   return isNaN(num) ? null : +Math.abs(num).toFixed(2);
 }
 
