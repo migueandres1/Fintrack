@@ -1,47 +1,47 @@
-import { useState }                          from 'react';
+import { useState, useEffect }               from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ArrowRightLeft, CreditCard,
   PiggyBank, Moon, Sun, LogOut, TrendingUp,
   CalendarRange, Wallet, BarChart2, Landmark,
-  MoreHorizontal, User, Tags, BookOpen, FileCode2,
+  MoreHorizontal, Tags, BookOpen, Sparkles, AlertTriangle,
 } from 'lucide-react';
 import { useStore } from '../../store/index.js';
 import clsx        from 'clsx';
 
 // ── Nav completa (sidebar desktop) ────────────────────────────────────────
 const NAV = [
-  { to: '/',             icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/transactions', icon: ArrowRightLeft,  label: 'Transacciones' },
-  { to: '/accounts',     icon: Landmark,        label: 'Cuentas' },
-  { to: '/debts',        icon: Wallet,          label: 'Deudas' },
-  { to: '/credit-cards', icon: CreditCard,      label: 'Tarjetas' },
-  { to: '/savings',      icon: PiggyBank,       label: 'Metas de ahorro' },
-  { to: '/budget',       icon: BarChart2,       label: 'Presupuesto' },
-  { to: '/planning',     icon: CalendarRange,   label: 'Planificación' },
-  { to: '/categories',   icon: Tags,            label: 'Categorías' },
+  { to: '/app',                icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/app/transactions',   icon: ArrowRightLeft,  label: 'Transacciones' },
+  { to: '/app/accounts',       icon: Landmark,        label: 'Cuentas' },
+  { to: '/app/debts',          icon: Wallet,          label: 'Deudas' },
+  { to: '/app/credit-cards',   icon: CreditCard,      label: 'Tarjetas' },
+  { to: '/app/savings',        icon: PiggyBank,       label: 'Metas de ahorro' },
+  { to: '/app/budget',         icon: BarChart2,       label: 'Presupuesto' },
+  { to: '/app/planning',       icon: CalendarRange,   label: 'Planificación' },
+  { to: '/app/categories',     icon: Tags,            label: 'Categorías' },
 ];
 
 const DOCS_NAV = [
-  { to: '/guide',     icon: BookOpen,   label: 'Guía de usuario' },
-  { to: '/tech-docs', icon: FileCode2,  label: 'Docs técnica' },
+  { to: '/app/pricing', icon: Sparkles, label: 'Planes' },
+  { to: '/app/guide',   icon: BookOpen, label: 'Guía de usuario' },
 ];
 
 // ── Bottom tab bar (mobile): 4 tabs principales + "Más" ───────────────────
 const BOTTOM_TABS = [
-  { to: '/',             icon: LayoutDashboard, label: 'Inicio' },
-  { to: '/transactions', icon: ArrowRightLeft,  label: 'Movimientos' },
-  { to: '/budget',       icon: BarChart2,       label: 'Presupuesto' },
-  { to: '/accounts',     icon: Landmark,        label: 'Cuentas' },
+  { to: '/app',              icon: LayoutDashboard, label: 'Inicio' },
+  { to: '/app/transactions', icon: ArrowRightLeft,  label: 'Movimientos' },
+  { to: '/app/budget',       icon: BarChart2,       label: 'Presupuesto' },
+  { to: '/app/accounts',     icon: Landmark,        label: 'Cuentas' },
 ];
 const MORE_ITEMS = [
-  { to: '/debts',        icon: Wallet,        label: 'Deudas' },
-  { to: '/credit-cards', icon: CreditCard,    label: 'Tarjetas' },
-  { to: '/savings',      icon: PiggyBank,     label: 'Metas de ahorro' },
-  { to: '/planning',     icon: CalendarRange, label: 'Planificación' },
-  { to: '/categories',   icon: Tags,          label: 'Categorías' },
-  { to: '/guide',        icon: BookOpen,      label: 'Guía' },
-  { to: '/tech-docs',    icon: FileCode2,     label: 'Docs técnica' },
+  { to: '/app/debts',        icon: Wallet,        label: 'Deudas' },
+  { to: '/app/credit-cards', icon: CreditCard,    label: 'Tarjetas' },
+  { to: '/app/savings',      icon: PiggyBank,     label: 'Metas de ahorro' },
+  { to: '/app/planning',     icon: CalendarRange, label: 'Planificación' },
+  { to: '/app/categories',   icon: Tags,          label: 'Categorías' },
+  { to: '/app/pricing', icon: Sparkles, label: 'Planes' },
+  { to: '/app/guide',   icon: BookOpen, label: 'Guía' },
 ];
 
 // ── Sidebar desktop ────────────────────────────────────────────────────────
@@ -50,13 +50,13 @@ function UserRow({ user, onLogout }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2">
       <button
-        onClick={() => nav('/profile')}
+        onClick={() => nav('/app/profile')}
         className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold text-sm hover:bg-brand-500/30 transition-colors shrink-0"
         title="Mi perfil"
       >
         {user?.name?.[0]?.toUpperCase()}
       </button>
-      <button onClick={() => nav('/profile')} className="flex-1 min-w-0 text-left hover:opacity-80 transition-opacity">
+      <button onClick={() => nav('/app/profile')} className="flex-1 min-w-0 text-left hover:opacity-80 transition-opacity">
         <p className="text-xs font-medium text-white truncate">{user?.name}</p>
         <p className="text-xs text-white/40 truncate">{user?.currency}</p>
       </button>
@@ -82,7 +82,7 @@ function Sidebar({ onLogout, user, darkMode, toggleDark }) {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end={to === '/app'}
             className={({ isActive }) =>
               clsx(
                 'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
@@ -136,7 +136,7 @@ function Sidebar({ onLogout, user, darkMode, toggleDark }) {
 function BottomTabBar({ moreOpen, setMoreOpen }) {
   const location = useLocation();
   const isMoreActive = MORE_ITEMS.some(n => location.pathname.startsWith(n.to))
-    || location.pathname.startsWith('/profile');
+    || location.pathname.startsWith('/app/profile');
 
   return (
     <nav
@@ -147,7 +147,7 @@ function BottomTabBar({ moreOpen, setMoreOpen }) {
         <NavLink
           key={to}
           to={to}
-          end={to === '/'}
+          end={to === '/app'}
           onClick={() => setMoreOpen(false)}
           className={({ isActive }) =>
             clsx(
@@ -224,7 +224,7 @@ function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
         {/* Divider + acciones de cuenta */}
         <div className="mx-4 mt-1 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
           <button
-            onClick={() => { nav('/profile'); onClose(); }}
+            onClick={() => { nav('/app/profile'); onClose(); }}
             className="flex items-center gap-2.5 flex-1 px-4 py-3 rounded-2xl bg-[var(--surface-2)] text-sm font-medium text-[var(--text)]"
           >
             <div className="w-7 h-7 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold text-xs">
@@ -260,10 +260,14 @@ function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
 // ── Layout principal ───────────────────────────────────────────────────────
 export default function AppLayout() {
   const [moreOpen, setMoreOpen] = useState(false);
-  const { user, darkMode, toggleDark, logout } = useStore();
+  const { user, darkMode, toggleDark, logout, fetchBillingStatus, billingStatus } = useStore();
   const navigate = useNavigate();
 
+  useEffect(() => { fetchBillingStatus(); }, []);
+
   const handleLogout = () => { logout(); navigate('/login'); };
+
+  const trialExpired = billingStatus?.trial_expired;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--bg)]">
@@ -287,6 +291,22 @@ export default function AppLayout() {
           </div>
           <span className="text-display font-bold text-sm">FinTrack</span>
         </div>
+
+        {/* Banner prueba terminada */}
+        {trialExpired && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-600 dark:text-amber-400">
+            <div className="flex items-center gap-2 text-sm">
+              <AlertTriangle size={15} className="shrink-0" />
+              <span>Tu prueba gratis terminó. Algunas funciones están limitadas.</span>
+            </div>
+            <button
+              onClick={() => navigate('/app/pricing')}
+              className="shrink-0 text-xs font-semibold px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-white transition-colors"
+            >
+              Elegir plan
+            </button>
+          </div>
+        )}
 
         {/* Contenido — pb-24 en mobile para no quedar bajo el tab bar */}
         <div

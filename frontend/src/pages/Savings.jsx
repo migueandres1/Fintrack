@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Plus, Pencil, Trash2, PiggyBank, CheckCircle2 } from 'lucide-react';
 import { useStore }  from '../store/index.js';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
 import api           from '../services/api.js';
@@ -179,10 +180,13 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, 
 const EMPTY_EDIT_CONTRIB = { amount: '', contrib_date: localDate(), notes: '' };
 
 export default function Savings() {
-  const { goals, goalsLoading, fetchGoals, createGoal, updateGoal, deleteGoal, addContribution, user } = useStore();
+  const { goals, goalsLoading, fetchGoals, createGoal, updateGoal, deleteGoal, addContribution, user, billingStatus } = useStore();
   const currency = user?.currency || 'USD';
 
+  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
+
   const [modal,            setModal]           = useState(false);
+  const [upgradeModal,     setUpgradeModal]     = useState(false);
   const [contribModal,     setContribModal]     = useState(false);
   const [editContribModal, setEditContribModal] = useState(false);
   const [delContrib,       setDelContrib]       = useState(null); // { contrib, goalId, refresh }
@@ -198,7 +202,10 @@ export default function Savings() {
 
   useEffect(() => { fetchGoals(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY_GOAL); setModal(true); };
+  const openCreate = () => {
+    if (effectivePlan === 'free' && goals.length >= 1) { setUpgradeModal(true); return; }
+    setEditing(null); setForm(EMPTY_GOAL); setModal(true);
+  };
   const openEdit   = (g) => {
     setEditing(g);
     setForm({ name: g.name, target_amount: g.target_amount, deadline: g.deadline || '', icon: g.icon, color: g.color });
@@ -334,6 +341,8 @@ export default function Savings() {
           )}
         </>
       )}
+
+      <UpgradeModal open={upgradeModal} onClose={() => setUpgradeModal(false)} feature="limit" />
 
       {/* Create/Edit Modal */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar meta' : 'Nueva meta de ahorro'}>

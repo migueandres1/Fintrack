@@ -6,6 +6,7 @@ import {
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, Empty, Spinner } from '../components/ui/index.jsx';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
 
@@ -147,17 +148,24 @@ export default function Accounts() {
   const {
     accounts, accountsLoading, fetchAccounts,
     createAccount, updateAccount, deleteAccount,
+    user, billingStatus,
   } = useStore();
 
-  const [modal,   setModal]   = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [deleting,setDeleting]= useState(null);
-  const [form,    setForm]    = useState(EMPTY_FORM);
-  const [busy,    setBusy]    = useState(false);
+  const [modal,        setModal]        = useState(false);
+  const [upgradeModal, setUpgradeModal] = useState(false);
+  const [editing,      setEditing]      = useState(null);
+  const [deleting,     setDeleting]     = useState(null);
+  const [form,         setForm]         = useState(EMPTY_FORM);
+  const [busy,         setBusy]         = useState(false);
+
+  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
 
   useEffect(() => { fetchAccounts(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setModal(true); };
+  const openCreate = () => {
+    if (effectivePlan === 'free' && accounts.length >= 2) { setUpgradeModal(true); return; }
+    setEditing(null); setForm(EMPTY_FORM); setModal(true);
+  };
   const openEdit   = (a) => {
     setEditing(a);
     setForm({
@@ -252,6 +260,8 @@ export default function Accounts() {
           ))}
         </div>
       )}
+
+      <UpgradeModal open={upgradeModal} onClose={() => setUpgradeModal(false)} feature="limit" />
 
       {/* Modal crear/editar */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar cuenta' : 'Nueva cuenta'}>

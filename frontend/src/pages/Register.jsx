@@ -20,7 +20,7 @@ export default function Register() {
     setBusy(true); setErr('');
     try {
       await register(form.name, form.email, form.password, form.currency);
-      navigate('/');
+      navigate('/onboarding');
     } catch (error) {
       setErr(error.response?.data?.error || 'Error al registrarse');
     } finally {

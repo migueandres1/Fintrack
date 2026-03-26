@@ -49,6 +49,29 @@ export const useStore = create(
         document.documentElement.classList.toggle('dark', darkMode);
       },
 
+      // ── Billing ───────────────────────────────────────
+      billingStatus: null,
+
+      fetchBillingStatus: async () => {
+        try {
+          const { data } = await api.get('/billing/status');
+          set({ billingStatus: data });
+          // Sincroniza el plan en el objeto user también
+          set((s) => ({ user: s.user ? { ...s.user, plan: data.plan } : s.user }));
+          return data;
+        } catch { /* silencioso si no hay auth */ }
+      },
+
+      startCheckout: async (priceKey) => {
+        const { data } = await api.post('/billing/checkout', { price_key: priceKey });
+        return data.url;
+      },
+
+      createPortal: async () => {
+        const { data } = await api.post('/billing/portal');
+        return data.url;
+      },
+
       // ── Dashboard ─────────────────────────────────────
       dashboard: null,
       dashLoading: false,

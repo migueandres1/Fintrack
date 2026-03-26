@@ -4,6 +4,7 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Respons
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
 
@@ -318,21 +319,27 @@ function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
 }
 
 export default function Debts() {
-  const { debts, debtsLoading, fetchDebts, createDebt, updateDebt, deleteDebt, addDebtPayment, user, creditCards, fetchCreditCards } = useStore();
+  const { debts, debtsLoading, fetchDebts, createDebt, updateDebt, deleteDebt, addDebtPayment, user, creditCards, fetchCreditCards, billingStatus } = useStore();
   const currency = user?.currency || 'USD';
 
-  const [modal, setModal] = useState(false);
-  const [payModal, setPayModal] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [deleting, setDeleting] = useState(null);
-  const [payDebt, setPayDebt] = useState(null);
-  const [form, setForm] = useState(EMPTY_DEBT);
+  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
+
+  const [modal,        setModal]        = useState(false);
+  const [upgradeModal, setUpgradeModal] = useState(false);
+  const [payModal,     setPayModal]     = useState(false);
+  const [editing,      setEditing]      = useState(null);
+  const [deleting,     setDeleting]     = useState(null);
+  const [payDebt,      setPayDebt]      = useState(null);
+  const [form,         setForm]         = useState(EMPTY_DEBT);
   const [payForm, setPayForm] = useState(EMPTY_PAY);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { fetchDebts(); fetchCreditCards(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY_DEBT); setModal(true); };
+  const openCreate = () => {
+    if (effectivePlan === 'free') { setUpgradeModal(true); return; }
+    setEditing(null); setForm(EMPTY_DEBT); setModal(true);
+  };
 
   const openEdit = (d) => {
     setEditing(d);
@@ -362,6 +369,11 @@ export default function Debts() {
       if (editing) await updateDebt(editing.id, payload);
       else await createDebt(payload);
       setModal(false); fetchDebts();
+    } catch (err) {
+      if (err.response?.status === 403) {
+        setModal(false);
+        setUpgradeModal(true);
+      } else { throw err; }
     } finally { setBusy(false); }
   };
 
@@ -422,6 +434,8 @@ export default function Debts() {
           ))}
         </div>
       )}
+
+      <UpgradeModal open={upgradeModal} onClose={() => setUpgradeModal(false)} feature="debts" />
 
       {/* Modal crear/editar */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar deuda' : 'Nueva deuda'}>

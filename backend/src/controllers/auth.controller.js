@@ -13,10 +13,10 @@ export async function register(req, res) {
 
     const hash = await bcrypt.hash(password, 12);
     const [result] = await pool.query(
-      'INSERT INTO users (name, email, password_hash, currency) VALUES (?,?,?,?)',
-      [name, email, hash, currency]
+      'INSERT INTO users (name, email, password_hash, currency, plan) VALUES (?,?,?,?,?)',
+      [name, email, hash, currency, 'beta']
     );
-    const user = { id: result.insertId, name, email, currency, onboarding_completed: 0 };
+    const user = { id: result.insertId, name, email, currency, onboarding_completed: 0, plan: 'beta' };
     res.status(201).json({ token: sign(user.id), user });
   } catch (err) {
     console.error(err);
@@ -28,7 +28,7 @@ export async function login(req, res) {
   const { email, password } = req.body;
   try {
     const [rows] = await pool.query(
-      'SELECT id, name, email, password_hash, currency, dark_mode, onboarding_completed FROM users WHERE email = ?',
+      'SELECT id, name, email, password_hash, currency, dark_mode, onboarding_completed, plan, is_admin FROM users WHERE email = ?',
       [email]
     );
     const user = rows[0];
@@ -48,7 +48,7 @@ export async function login(req, res) {
 export async function me(req, res) {
   try {
     const [rows] = await pool.query(
-      'SELECT id, name, email, currency, dark_mode, onboarding_completed, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, currency, dark_mode, onboarding_completed, plan, is_admin, created_at FROM users WHERE id = ?',
       [req.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });

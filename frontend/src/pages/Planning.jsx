@@ -6,6 +6,8 @@ import {
 import { useStore } from '../store/index.js';
 import { fmt } from '../utils/format.js';
 import { ProgressBar, Spinner } from '../components/ui/index.jsx';
+import UpgradeModal from '../components/UpgradeModal.jsx';
+import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 
 // Convierte cualquier frecuencia a equivalente mensual
@@ -95,8 +97,11 @@ export default function Planning() {
     debts, debtsLoading, fetchDebts,
     goals, goalsLoading, fetchGoals,
     recurring, recurringLoading, fetchRecurring,
-    user,
+    user, billingStatus,
   } = useStore();
+  const navigate = useNavigate();
+
+  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
 
   const [monthsToShow, setMonthsToShow] = useState(3);
   const currency = user?.currency || 'USD';
@@ -247,6 +252,26 @@ export default function Planning() {
   }), [monthsToShow, activeRec, activeDebts]);
 
   if (loading && !debts.length && !goals.length) return <Spinner />;
+
+  if (effectivePlan === 'free') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4 text-3xl">
+          📊
+        </div>
+        <h2 className="text-display font-bold text-xl mb-2">Cash flow y planificación</h2>
+        <p className="text-[var(--text-muted)] text-sm max-w-xs mb-6">
+          Visualizá tu flujo de caja proyectado, score financiero y calendario de compromisos. Disponible en el plan Pro.
+        </p>
+        <button
+          onClick={() => navigate('/app/pricing')}
+          className="btn-primary"
+        >
+          Ver planes — desde $4.99/mes
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-up">

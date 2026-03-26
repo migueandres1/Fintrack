@@ -4,7 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, Spinner, Empty, ProgressBar } from '../components/ui/index.jsx';
-import OcrModal from '../components/OcrModal.jsx';
+import OcrModal     from '../components/OcrModal.jsx';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
 
@@ -47,7 +48,15 @@ export default function Transactions() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState(null);
-  const [ocrModal, setOcrModal] = useState(false);
+  const [ocrModal,     setOcrModal]     = useState(false);
+  const [upgradeModal, setUpgradeModal] = useState(false);
+  const billingStatus = useStore((s) => s.billingStatus);
+  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
+
+  function openOcr() {
+    if (effectivePlan === 'free') { setUpgradeModal(true); return; }
+    setOcrModal(true);
+  }
 
   // Recurring state
   const [recModal, setRecModal] = useState(false);
@@ -108,6 +117,13 @@ export default function Transactions() {
       fetchDebts();
       fetchGoals();
       api.get('/transactions/summary').then(r => setSummary(r.data)).catch(() => { });
+    } catch (err) {
+      if (err.response?.status === 403 && err.response?.data?.code === 'LIMIT_REACHED') {
+        setModal(false);
+        setUpgradeModal(true);
+      } else {
+        throw err;
+      }
     } finally { setBusy(false); }
   };
 
@@ -221,7 +237,7 @@ export default function Transactions() {
           <button onClick={exportCsv} className="btn-ghost hidden sm:flex"><Download size={15} /> Exportar</button>
           <button onClick={openRecurring} className="btn-ghost"><RefreshCw size={15} /><span className="hidden sm:inline">Recurrentes</span></button>
           <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost"><Filter size={15} /><span className="hidden sm:inline">Filtros</span></button>
-          <button onClick={() => setOcrModal(true)} className="btn-ghost" title="Escanear recibo"><ScanLine size={15} /></button>
+          <button onClick={openOcr} className="btn-ghost" title="Escanear recibo"><ScanLine size={15} /></button>
           <button onClick={openCreate} className="btn-primary"><Plus size={15} /><span className="hidden sm:inline">Nueva</span></button>
         </div>
       </div>
@@ -692,6 +708,12 @@ export default function Transactions() {
         onConfirm={confirmDeleteRec}
         title="Eliminar recurrente"
         message={`¿Eliminar "${deletingRec?.description || deletingRec?.category_name}"? Se dejará de generar automáticamente.`}
+      />
+
+      <UpgradeModal
+        open={upgradeModal}
+        onClose={() => setUpgradeModal(false)}
+        feature="ocr"
       />
 
       <OcrModal

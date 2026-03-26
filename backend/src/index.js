@@ -7,6 +7,7 @@ import path         from 'path';
 import crypto       from 'crypto';
 import { fileURLToPath } from 'url';
 import routes       from './routes/index.js';
+import * as billing from './controllers/billing.controller.js';
 
 dotenv.config();
 
@@ -80,6 +81,14 @@ function loginPage(errMsg = '') {
 </body>
 </html>`;
 }
+
+// ── Stripe webhook: raw body ANTES de express.json() ─────────────────────
+// Stripe necesita el buffer original para verificar la firma HMAC.
+app.post(
+  '/api/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  billing.handleWebhook
+);
 
 // ── Middlewares necesarios ANTES de las rutas de docs ─────────────────────
 app.use(parseCookies);

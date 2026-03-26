@@ -15,8 +15,8 @@ export default function Login() {
     e.preventDefault();
     setBusy(true); setErr('');
     try {
-      await login(form.email, form.password);
-      navigate('/');
+      const data = await login(form.email, form.password);
+      navigate(data.user.is_admin ? '/admin' : '/');
     } catch (error) {
       setErr(error.response?.data?.error || 'Error al iniciar sesión');
     } finally {

@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, DollarSign, C
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
+import UpgradeModal from '../components/UpgradeModal.jsx';
 import api   from '../services/api.js';
 import clsx  from 'clsx';
 
@@ -236,22 +237,28 @@ export default function CreditCards() {
   const {
     creditCards, creditCardsLoading, fetchCreditCards,
     createCreditCard, updateCreditCard, deleteCreditCard, addCardPayment,
-    user, categories, fetchCategories,
+    user, categories, fetchCategories, billingStatus,
   } = useStore();
   const currency = user?.currency || 'USD';
 
-  const [modal,     setModal]    = useState(false);
-  const [payModal,  setPayModal] = useState(false);
-  const [editing,   setEditing]  = useState(null);
-  const [deleting,  setDeleting] = useState(null);
-  const [payCard,   setPayCard]  = useState(null);
-  const [form,      setForm]     = useState(EMPTY_CARD);
-  const [payForm,   setPayForm]  = useState(EMPTY_PAY);
-  const [busy,      setBusy]     = useState(false);
+  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
+
+  const [modal,        setModal]        = useState(false);
+  const [upgradeModal, setUpgradeModal] = useState(false);
+  const [payModal,     setPayModal]     = useState(false);
+  const [editing,      setEditing]      = useState(null);
+  const [deleting,     setDeleting]     = useState(null);
+  const [payCard,      setPayCard]      = useState(null);
+  const [form,         setForm]         = useState(EMPTY_CARD);
+  const [payForm,      setPayForm]      = useState(EMPTY_PAY);
+  const [busy,         setBusy]         = useState(false);
 
   useEffect(() => { fetchCreditCards(); fetchCategories(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY_CARD); setModal(true); };
+  const openCreate = () => {
+    if (effectivePlan === 'free' && creditCards.length >= 1) { setUpgradeModal(true); return; }
+    setEditing(null); setForm(EMPTY_CARD); setModal(true);
+  };
   const openEdit   = (c) => {
     setEditing(c);
     setForm({
@@ -330,6 +337,8 @@ export default function CreditCards() {
           ))}
         </div>
       )}
+
+      <UpgradeModal open={upgradeModal} onClose={() => setUpgradeModal(false)} feature="limit" />
 
       {/* Modal crear/editar */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar tarjeta' : 'Nueva tarjeta de crédito'}>
