@@ -1,27 +1,29 @@
 import { useRef, useState } from 'react';
 
 // Comprime imágenes grandes antes de subir (fotos de cámara móvil ~6MB → ~400KB)
+// Usa createImageBitmap con imageOrientation: 'from-image' para respetar la
+// rotación EXIF del móvil antes de dibujar en canvas (evita imagen de costado).
 async function compressImage(file, maxPx = 1920, quality = 0.82) {
   if (!file.type.startsWith('image/') || file.size < 1.2 * 1024 * 1024) return file;
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const ratio = Math.min(1, maxPx / Math.max(img.width, img.height));
-      const w = Math.round(img.width  * ratio);
-      const h = Math.round(img.height * ratio);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const ratio = Math.min(1, maxPx / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width  * ratio);
+    const h = Math.round(bitmap.height * ratio);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    return await new Promise((resolve) =>
       canvas.toBlob(
         (blob) => resolve(new File([blob], 'receipt.jpg', { type: 'image/jpeg' })),
         'image/jpeg', quality
-      );
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-    img.src = url;
-  });
+      )
+    );
+  } catch {
+    // Fallback: navegadores que no soporten createImageBitmap
+    return file;
+  }
 }
 import { ScanLine, Upload, X, CheckCircle, AlertCircle, Loader2, ImageIcon, Banknote, CreditCard } from 'lucide-react';
 import { Modal } from './ui/index.jsx';
