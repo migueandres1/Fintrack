@@ -5,8 +5,9 @@
 @layer base {
   :root { --brand: #0ea5e9; --income: #22c55e; --expense: #f43f5e; }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body { @apply bg-surface-50 text-surface-900 font-sans antialiased dark:bg-surface-950 dark:text-slate-100; }
+  html { scroll-behavior: smooth; min-height: 100dvh; }
+  body { @apply bg-surface-50 text-surface-900 font-sans antialiased dark:bg-surface-950 dark:text-slate-100; min-height: 100dvh; }
+  #root { min-height: 100dvh; display: flex; flex-direction: column; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { @apply bg-transparent; }
   ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full dark:bg-slate-600; }

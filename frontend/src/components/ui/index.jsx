@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
-import { X }    from 'lucide-react';
-import clsx      from 'clsx';
+import { useEffect }    from 'react';
+import { createPortal } from 'react-dom';
+import { X }            from 'lucide-react';
+import clsx             from 'clsx';
 
 // ── Modal ──────────────────────────────────────────────────────
 export function Modal({ open, onClose, title, children, size = 'md' }) {
@@ -14,29 +15,36 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
 
   if (!open) return null;
   const widths = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
-  return (
-    <div
-      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div className="flex min-h-full items-start justify-center p-4 pt-12 pb-10">
-        <div
-          className={clsx(
-            'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
-            widths[size]
-          )}
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
-            <h2 className="text-display font-bold text-base">{title}</h2>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
-              <X size={16} />
-            </button>
+
+  // Portal → renderiza directo en document.body, fuera de cualquier
+  // contenedor con overflow. Fixes iOS Safari donde position:fixed dentro
+  // de overflow:auto se comporta como absolute (se recorta al contenedor).
+  return createPortal(
+    <>
+      {/* Backdrop: fixed inset-0 limpio, siempre cubre el 100% del viewport */}
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      {/* Scroll container: fixed inset-0, overflow-y-auto para iOS */}
+      <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain" onClick={onClose}>
+        <div className="flex min-h-full items-start justify-center p-4 pt-12 pb-10">
+          <div
+            className={clsx(
+              'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
+              widths[size]
+            )}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
+              <h2 className="text-display font-bold text-base">{title}</h2>
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5">{children}</div>
           </div>
-          <div className="p-5">{children}</div>
         </div>
       </div>
-    </div>
+    </>,
+    document.body
   );
 }
 
