@@ -4,6 +4,7 @@ import clsx      from 'clsx';
 
 // ── Modal ──────────────────────────────────────────────────────
 export function Modal({ open, onClose, title, children, size = 'md' }) {
+  // Bloquea el scroll del body mientras el modal está abierto
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -14,20 +15,27 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
   if (!open) return null;
   const widths = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={clsx(
-        'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
-        'max-h-[calc(100dvh-5rem)]',
-        widths[size]
-      )}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
-          <h2 className="text-display font-bold text-base">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
-            <X size={16} />
-          </button>
+    /*
+     * El overflow-y-auto va en el contenedor fixed exterior, NO en un div hijo.
+     * iOS Safari no hace scroll con touch en overflow anidado dentro de fixed,
+     * pero sí scrollea el elemento fixed directamente.
+     */
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
+      {/* Backdrop separado como fixed para que no scrollee con el contenido */}
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="flex min-h-full items-start justify-center p-4 pt-12 pb-10">
+        <div className={clsx(
+          'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
+          widths[size]
+        )}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
+            <h2 className="text-display font-bold text-base">{title}</h2>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="p-5">{children}</div>
         </div>
-        <div className="p-5 overflow-y-auto flex-1 min-h-0 overscroll-contain">{children}</div>
       </div>
     </div>
   );
