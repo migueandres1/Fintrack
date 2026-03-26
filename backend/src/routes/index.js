@@ -67,10 +67,12 @@ r.delete('/debts/:id/planned/:plannedId',    authenticate, debts.removePlanned);
 // Savings
 r.get   ('/savings',                        authenticate, savings.list);
 r.post  ('/savings',                        authenticate, savings.create);
-r.get   ('/savings/:id',                    authenticate, savings.getOne);
-r.put   ('/savings/:id',                    authenticate, savings.update);
-r.delete('/savings/:id',                    authenticate, savings.remove);
-r.post  ('/savings/:id/contributions',      authenticate, savings.addContribution);
+r.get   ('/savings/:id',                          authenticate, savings.getOne);
+r.put   ('/savings/:id',                          authenticate, savings.update);
+r.delete('/savings/:id',                          authenticate, savings.remove);
+r.post  ('/savings/:id/contributions',            authenticate, savings.addContribution);
+r.put   ('/savings/contributions/:contribId',     authenticate, savings.updateContribution);
+r.delete('/savings/contributions/:contribId',     authenticate, savings.deleteContribution);
 
 // Recurring transactions
 r.get   ('/recurring',     authenticate, recurring.list);
@@ -97,9 +99,10 @@ r.delete('/accounts/:id',                  authenticate, accounts.remove);
 r.get   ('/accounts/:id/transactions',     authenticate, accounts.getTransactions);
 
 // Budgets
-r.get   ('/budgets',                    authenticate, budgets.list);
-r.put   ('/budgets',                    authenticate, budgets.upsert);
-r.delete('/budgets/:categoryId',        authenticate, budgets.remove);
-r.post  ('/budgets/copy',               authenticate, budgets.copyFromLastMonth);
+r.get   ('/budgets',                              authenticate, budgets.list);
+r.put   ('/budgets',                              authenticate, budgets.upsert);
+r.post  ('/budgets/copy',                         authenticate, budgets.copyFromLastMonth);
+r.get   ('/budgets/:categoryId/transactions',     authenticate, budgets.categoryDetail);
+r.delete('/budgets/:categoryId',                  authenticate, budgets.remove);
 
 export default r;

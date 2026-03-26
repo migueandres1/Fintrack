@@ -83,7 +83,7 @@ export async function addContribution(req, res) {
       [id, amount, contrib_date, notes]
     );
 
-    const newAmount = +(goal.current_amount + amount).toFixed(2);
+    const newAmount = +(Number(goal.current_amount) + Number(amount)).toFixed(2);
     const isCompleted = newAmount >= goal.target_amount ? 1 : 0;
     await pool.query(
       'UPDATE savings_goals SET current_amount=?, is_completed=? WHERE id=?',
@@ -92,6 +92,66 @@ export async function addContribution(req, res) {
 
     res.status(201).json({ contribution_id: result.insertId, new_amount: newAmount, is_completed: isCompleted === 1 });
   } catch (err) {
+    res.status(500).json({ error: 'Error interno' });
+  }
+}
+
+// Helper: recalculate goal current_amount from contributions sum
+async function recalcGoal(goalId) {
+  const [[{ total }]] = await pool.query(
+    'SELECT COALESCE(SUM(amount), 0) AS total FROM savings_contributions WHERE goal_id = ?', [goalId]
+  );
+  const [[goal]] = await pool.query('SELECT target_amount FROM savings_goals WHERE id = ?', [goalId]);
+  const isCompleted = +total >= Number(goal.target_amount) ? 1 : 0;
+  await pool.query(
+    'UPDATE savings_goals SET current_amount = ?, is_completed = ? WHERE id = ?',
+    [+total, isCompleted, goalId]
+  );
+  return +total;
+}
+
+// PUT /savings/contributions/:contribId
+export async function updateContribution(req, res) {
+  const { contribId } = req.params;
+  const { amount, contrib_date, notes } = req.body;
+  try {
+    const [[contrib]] = await pool.query(
+      `SELECT sc.*, sg.user_id FROM savings_contributions sc
+       JOIN savings_goals sg ON sg.id = sc.goal_id
+       WHERE sc.id = ?`, [contribId]
+    );
+    if (!contrib || contrib.user_id !== req.userId) {
+      return res.status(404).json({ error: 'No encontrado' });
+    }
+    await pool.query(
+      'UPDATE savings_contributions SET amount=?, contrib_date=?, notes=? WHERE id=?',
+      [amount, contrib_date, notes ?? contrib.notes, contribId]
+    );
+    const newAmount = await recalcGoal(contrib.goal_id);
+    res.json({ success: true, new_amount: newAmount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error interno' });
+  }
+}
+
+// DELETE /savings/contributions/:contribId
+export async function deleteContribution(req, res) {
+  const { contribId } = req.params;
+  try {
+    const [[contrib]] = await pool.query(
+      `SELECT sc.*, sg.user_id FROM savings_contributions sc
+       JOIN savings_goals sg ON sg.id = sc.goal_id
+       WHERE sc.id = ?`, [contribId]
+    );
+    if (!contrib || contrib.user_id !== req.userId) {
+      return res.status(404).json({ error: 'No encontrado' });
+    }
+    await pool.query('DELETE FROM savings_contributions WHERE id = ?', [contribId]);
+    const newAmount = await recalcGoal(contrib.goal_id);
+    res.json({ success: true, new_amount: newAmount });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Error interno' });
   }
 }

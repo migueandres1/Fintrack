@@ -304,7 +304,7 @@ export const useStore = create(
       },
 
       // ── Budgets ───────────────────────────────────────
-      budgets:        { month: '', items: [], categories: [] },
+      budgets:        { month: '', items: [], categories: [], recurring: [], debts: [], goals: [] },
       budgetsLoading: false,
 
       fetchBudgets: async (month) => {
@@ -327,6 +327,11 @@ export const useStore = create(
 
       copyBudgetsFromLastMonth: async (targetMonth) => {
         await api.post('/budgets/copy', { targetMonth });
+      },
+
+      fetchBudgetCategoryDetail: async (categoryId, month) => {
+        const { data } = await api.get(`/budgets/${categoryId}/transactions`, { params: { month } });
+        return data;
       },
     }),
     {

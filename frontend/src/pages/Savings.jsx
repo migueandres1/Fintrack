@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, PiggyBank, Target, CheckCircle2 } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Plus, Pencil, Trash2, PiggyBank, CheckCircle2 } from 'lucide-react';
 import { useStore }  from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
@@ -16,7 +16,7 @@ const EMPTY_CONTRIB = {
   amount: '', contrib_date: localDate(), notes: '',
 };
 
-function GoalCard({ goal, currency, onEdit, onDelete, onContrib }) {
+function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, onDeleteContrib }) {
   const [detail,   setDetail]   = useState(null);
   const [expanded, setExpanded] = useState(false);
 
@@ -33,13 +33,15 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib }) {
   })();
   const neededPerMonth = monthsLeft ? (remaining / monthsLeft).toFixed(2) : null;
 
-  const loadDetail = async () => {
-    if (!expanded && !detail) {
+  const loadDetail = async (force = false) => {
+    if (force || (!expanded && !detail)) {
       const { data } = await api.get(`/savings/${goal.id}`);
       setDetail(data);
     }
-    setExpanded(!expanded);
+    if (!force) setExpanded(!expanded);
   };
+
+  const refreshDetail = () => loadDetail(true);
 
   return (
     <div className={clsx('card transition-all', goal.is_completed && 'ring-1 ring-green-500/40')}>
@@ -137,12 +139,26 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib }) {
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
                 {detail.contributions.map((c) => (
-                  <tr key={c.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50">
+                  <tr key={c.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50 group">
                     <td className="py-1.5">{fmt.date(c.contrib_date)}</td>
                     <td className="text-right font-semibold text-mono" style={{ color: goal.color }}>
                       +{fmt.currency(c.amount, currency)}
                     </td>
                     <td className="pl-3 text-[var(--text-muted)]">{c.notes || '—'}</td>
+                    <td className="pl-2 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => onEditContrib(c, goal.id, refreshDetail)}
+                          className="p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-700">
+                          <Pencil size={11} className="text-[var(--text-muted)]" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteContrib(c, goal.id, refreshDetail)}
+                          className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20">
+                          <Trash2 size={11} className="text-rose-400" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -157,18 +173,25 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib }) {
   );
 }
 
+const EMPTY_EDIT_CONTRIB = { amount: '', contrib_date: localDate(), notes: '' };
+
 export default function Savings() {
   const { goals, goalsLoading, fetchGoals, createGoal, updateGoal, deleteGoal, addContribution, user } = useStore();
   const currency = user?.currency || 'USD';
 
-  const [modal,       setModal]      = useState(false);
-  const [contribModal,setContribModal]= useState(false);
-  const [editing,     setEditing]    = useState(null);
-  const [deleting,    setDeleting]   = useState(null);
-  const [contribGoal, setContribGoal]= useState(null);
-  const [form,        setForm]       = useState(EMPTY_GOAL);
-  const [contribForm, setContribForm]= useState(EMPTY_CONTRIB);
-  const [busy,        setBusy]       = useState(false);
+  const [modal,            setModal]           = useState(false);
+  const [contribModal,     setContribModal]     = useState(false);
+  const [editContribModal, setEditContribModal] = useState(false);
+  const [delContrib,       setDelContrib]       = useState(null); // { contrib, goalId, refresh }
+  const [editing,          setEditing]          = useState(null);
+  const [deleting,         setDeleting]         = useState(null);
+  const [contribGoal,      setContribGoal]      = useState(null);
+  const [form,             setForm]             = useState(EMPTY_GOAL);
+  const [contribForm,      setContribForm]      = useState(EMPTY_CONTRIB);
+  const [editContribData,  setEditContribData]  = useState(null); // { contrib, goalId, refresh }
+  const [editContribForm,  setEditContribForm]  = useState(EMPTY_EDIT_CONTRIB);
+  const [busy,             setBusy]             = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => { fetchGoals(); }, []);
 
@@ -180,6 +203,16 @@ export default function Savings() {
   };
   const openContrib = (g) => { setContribGoal(g); setContribForm(EMPTY_CONTRIB); setContribModal(true); };
 
+  const openEditContrib = (contrib, goalId, refresh) => {
+    setEditContribData({ contrib, goalId, refresh });
+    setEditContribForm({ amount: String(contrib.amount), contrib_date: contrib.contrib_date?.split('T')[0] || localDate(), notes: contrib.notes || '' });
+    setEditContribModal(true);
+  };
+
+  const openDelContrib = (contrib, goalId, refresh) => {
+    setDelContrib({ contrib, goalId, refresh });
+  };
+
   const save = async (e) => {
     e.preventDefault(); setBusy(true);
     try {
@@ -190,11 +223,42 @@ export default function Savings() {
   };
 
   const saveContrib = async (e) => {
-    e.preventDefault(); setBusy(true);
+    e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setBusy(true);
+    setContribModal(false); // close immediately to prevent double clicks
     try {
       await addContribution(contribGoal.id, contribForm);
-      setContribModal(false); fetchGoals();
-    } finally { setBusy(false); }
+      fetchGoals();
+    } finally {
+      submittingRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  const saveEditContrib = async (e) => {
+    e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setBusy(true);
+    try {
+      await api.put(`/savings/contributions/${editContribData.contrib.id}`, editContribForm);
+      setEditContribModal(false);
+      fetchGoals();
+      editContribData.refresh();
+    } finally {
+      submittingRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  const confirmDeleteContrib = async () => {
+    if (!delContrib) return;
+    await api.delete(`/savings/contributions/${delContrib.contrib.id}`);
+    fetchGoals();
+    delContrib.refresh();
+    setDelContrib(null);
   };
 
   const confirmDelete = async () => {
@@ -246,7 +310,8 @@ export default function Savings() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {active.map((g) => (
                 <GoalCard key={g.id} goal={g} currency={currency}
-                  onEdit={openEdit} onDelete={setDeleting} onContrib={openContrib} />
+                  onEdit={openEdit} onDelete={setDeleting} onContrib={openContrib}
+                  onEditContrib={openEditContrib} onDeleteContrib={openDelContrib} />
               ))}
             </div>
           )}
@@ -258,7 +323,8 @@ export default function Savings() {
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {completed.map((g) => (
                   <GoalCard key={g.id} goal={g} currency={currency}
-                    onEdit={openEdit} onDelete={setDeleting} onContrib={openContrib} />
+                    onEdit={openEdit} onDelete={setDeleting} onContrib={openContrib}
+                    onEditContrib={openEditContrib} onDeleteContrib={openDelContrib} />
                 ))}
               </div>
             </div>
@@ -345,6 +411,47 @@ export default function Savings() {
           </div>
         </form>
       </Modal>
+
+      {/* Edit contribution modal */}
+      <Modal open={editContribModal} onClose={() => setEditContribModal(false)} title="Editar aporte">
+        <form onSubmit={saveEditContrib} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Monto</label>
+              <input className="input" type="number" step="0.01" min="0.01" placeholder="0.00"
+                value={editContribForm.amount}
+                onChange={e => setEditContribForm(f => ({ ...f, amount: e.target.value }))} required />
+            </div>
+            <div>
+              <label className="label">Fecha</label>
+              <input className="input" type="date"
+                value={editContribForm.contrib_date}
+                onChange={e => setEditContribForm(f => ({ ...f, contrib_date: e.target.value }))} required />
+            </div>
+          </div>
+          <div>
+            <label className="label">Notas (opcional)</label>
+            <input className="input" type="text" placeholder="Ej: Ahorro de bonificación"
+              value={editContribForm.notes}
+              onChange={e => setEditContribForm(f => ({ ...f, notes: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={() => setEditContribModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center">
+              {busy ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete contribution confirm */}
+      <Confirm
+        open={!!delContrib}
+        onClose={() => setDelContrib(null)}
+        onConfirm={confirmDeleteContrib}
+        title="Eliminar aporte"
+        message={`¿Eliminar el aporte de ${delContrib ? fmt.currency(delContrib.contrib.amount, currency) : ''}? Se ajustará el total de la meta.`}
+      />
 
       <Confirm
         open={!!deleting}
