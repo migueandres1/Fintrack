@@ -20,14 +20,20 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
      * iOS Safari no hace scroll con touch en overflow anidado dentro de fixed,
      * pero sí scrollea el elemento fixed directamente.
      */
-    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
-      {/* Backdrop separado como fixed para que no scrollee con el contenido */}
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    {/* El backdrop va en el contenedor fixed directamente → cubre siempre todo inset-0.
+        El overflow-y-auto aquí (no en un hijo) es lo que permite scroll en iOS Safari. */}
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div className="flex min-h-full items-start justify-center p-4 pt-12 pb-10">
-        <div className={clsx(
-          'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
-          widths[size]
-        )}>
+        <div
+          className={clsx(
+            'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
+            widths[size]
+          )}
+          onClick={e => e.stopPropagation()}
+        >
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
             <h2 className="text-display font-bold text-base">{title}</h2>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors">
