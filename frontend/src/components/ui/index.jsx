@@ -1,12 +1,20 @@
+import { useEffect } from 'react';
 import { X }    from 'lucide-react';
 import clsx      from 'clsx';
 
 // ── Modal ──────────────────────────────────────────────────────
 export function Modal({ open, onClose, title, children, size = 'md' }) {
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   if (!open) return null;
   const widths = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-12">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className={clsx(
         'relative w-full flex flex-col bg-[var(--bg-card)] rounded-xl shadow-2xl animate-scale-in border border-[var(--border)]',
