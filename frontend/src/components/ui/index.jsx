@@ -15,13 +15,6 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
   if (!open) return null;
   const widths = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
   return (
-    /*
-     * El overflow-y-auto va en el contenedor fixed exterior, NO en un div hijo.
-     * iOS Safari no hace scroll con touch en overflow anidado dentro de fixed,
-     * pero sí scrollea el elemento fixed directamente.
-     */
-    {/* El backdrop va en el contenedor fixed directamente → cubre siempre todo inset-0.
-        El overflow-y-auto aquí (no en un hijo) es lo que permite scroll en iOS Safari. */}
     <div
       className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 backdrop-blur-sm"
       onClick={onClose}
