@@ -340,12 +340,14 @@ export const useStore = create(
         }
       },
 
+      // payload: { id?, category_id, name?, amount, month }
       saveBudget: async (payload) => {
         await api.put('/budgets', payload);
       },
 
-      deleteBudget: async (categoryId, month) => {
-        await api.delete(`/budgets/${categoryId}`, { params: { month } });
+      // Delete a single budget line by its id
+      deleteBudgetLine: async (id) => {
+        await api.delete(`/budgets/${id}`);
       },
 
       copyBudgetsFromLastMonth: async (targetMonth) => {
@@ -354,6 +356,16 @@ export const useStore = create(
 
       fetchBudgetCategoryDetail: async (categoryId, month) => {
         const { data } = await api.get(`/budgets/${categoryId}/transactions`, { params: { month } });
+        return data;
+      },
+
+      fetchBudgetCategoryHistory: async (categoryId, month, months = 4) => {
+        const { data } = await api.get(`/budgets/${categoryId}/history`, { params: { end_month: month, months } });
+        return data;
+      },
+
+      fetchBudgetSuggestions: async (month) => {
+        const { data } = await api.get('/budgets/suggestions', { params: { month } });
         return data;
       },
 

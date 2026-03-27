@@ -124,8 +124,10 @@ r.put   ('/budgets',                          authenticate, budgets.upsert);
 r.post  ('/budgets/copy',                     authenticate, budgets.copyFromLastMonth);
 r.post  ('/budgets/income',                   authenticate, budgets.addPlannedIncome);
 r.delete('/budgets/income/:id',               authenticate, budgets.removePlannedIncome);
+r.get   ('/budgets/suggestions',              authenticate, budgets.getSuggestions);
 r.get   ('/budgets/:categoryId/transactions', authenticate, budgets.categoryDetail);
-r.delete('/budgets/:categoryId',              authenticate, budgets.remove);
+r.get   ('/budgets/:categoryId/history',      authenticate, budgets.categoryHistory);
+r.delete('/budgets/:id',                      authenticate, budgets.remove);
 
 // ── Admin ───────────────────────────────────────────────────────────────────
 r.get('/admin/stats', authenticate, requireAdmin, admin.getStats);
