@@ -3,7 +3,11 @@ import pool from '../config/db.js';
 export async function list(req, res) {
   try {
     const [goals] = await pool.query(
-      'SELECT * FROM savings_goals WHERE user_id=? ORDER BY created_at DESC', [req.userId]
+      `SELECT sg.*, ba.name AS account_name, ba.color AS account_color
+       FROM savings_goals sg
+       LEFT JOIN bank_accounts ba ON ba.id = sg.account_id
+       WHERE sg.user_id = ? ORDER BY sg.created_at DESC`,
+      [req.userId]
     );
     res.json(goals);
   } catch (err) {
@@ -15,7 +19,11 @@ export async function getOne(req, res) {
   const { id } = req.params;
   try {
     const [[goal]] = await pool.query(
-      'SELECT * FROM savings_goals WHERE id=? AND user_id=?', [id, req.userId]
+      `SELECT sg.*, ba.name AS account_name, ba.color AS account_color
+       FROM savings_goals sg
+       LEFT JOIN bank_accounts ba ON ba.id = sg.account_id
+       WHERE sg.id = ? AND sg.user_id = ?`,
+      [id, req.userId]
     );
     if (!goal) return res.status(404).json({ error: 'No encontrado' });
 
@@ -29,32 +37,40 @@ export async function getOne(req, res) {
 }
 
 export async function create(req, res) {
-  const { name, target_amount, deadline, icon = 'piggy-bank', color = '#6366f1' } = req.body;
+  const { name, target_amount, deadline, icon = 'piggy-bank', color = '#6366f1', account_id } = req.body;
+  const deadlineVal = deadline ? String(deadline).slice(0, 10) : null;
   try {
     const [result] = await pool.query(
-      'INSERT INTO savings_goals (user_id, name, target_amount, deadline, icon, color) VALUES (?,?,?,?,?,?)',
-      [req.userId, name, target_amount, deadline, icon, color]
+      'INSERT INTO savings_goals (user_id, name, target_amount, deadline, icon, color, account_id) VALUES (?,?,?,?,?,?,?)',
+      [req.userId, name, target_amount, deadlineVal, icon, color, account_id || null]
     );
-    const [[goal]] = await pool.query('SELECT * FROM savings_goals WHERE id=?', [result.insertId]);
+    const [[goal]] = await pool.query(
+      `SELECT sg.*, ba.name AS account_name FROM savings_goals sg
+       LEFT JOIN bank_accounts ba ON ba.id = sg.account_id WHERE sg.id=?`,
+      [result.insertId]
+    );
     res.status(201).json(goal);
   } catch (err) {
+    console.error('[savings.create]', err);
     res.status(500).json({ error: 'Error interno' });
   }
 }
 
 export async function update(req, res) {
   const { id } = req.params;
-  const { name, target_amount, deadline, icon, color } = req.body;
+  const { name, target_amount, deadline, icon, color, account_id } = req.body;
+  const deadlineVal = deadline ? String(deadline).slice(0, 10) : null;
   try {
     const [[check]] = await pool.query('SELECT id FROM savings_goals WHERE id=? AND user_id=?', [id, req.userId]);
     if (!check) return res.status(404).json({ error: 'No encontrado' });
 
     await pool.query(
-      'UPDATE savings_goals SET name=?, target_amount=?, deadline=?, icon=?, color=? WHERE id=?',
-      [name, target_amount, deadline, icon, color, id]
+      'UPDATE savings_goals SET name=?, target_amount=?, deadline=?, icon=?, color=?, account_id=? WHERE id=?',
+      [name, target_amount, deadlineVal, icon, color, account_id || null, id]
     );
     res.json({ success: true });
   } catch (err) {
+    console.error('[savings.update]', err);
     res.status(500).json({ error: 'Error interno' });
   }
 }

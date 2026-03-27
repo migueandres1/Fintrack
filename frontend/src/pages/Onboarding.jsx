@@ -634,7 +634,7 @@ function StepSavings({ onNext, onPrev }) {
 // ── Step 6: Tarjetas de crédito ────────────────────────────────────────────
 function StepCards({ onNext, onPrev }) {
   const [added, setAdded] = useState([]);
-  const [form, setForm] = useState({ name: '', last_four: '', credit_limit: '', billing_day: '1', due_day: '15' });
+  const [form, setForm] = useState({ name: '', last_four: '', credit_limit: '', billing_day: '1', due_day: '15', initial_balance: '' });
   const [busy, setBusy] = useState(false);
 
   const add = async (e) => {
@@ -647,9 +647,10 @@ function StepCards({ onNext, onPrev }) {
         credit_limit: Number(form.credit_limit),
         billing_day: Number(form.billing_day),
         due_day: Number(form.due_day),
+        initial_balance: Number(form.initial_balance) || 0,
       });
       setAdded((prev) => [...prev, { ...data, _label: form.name, _sublabel: `····${form.last_four} · límite $${Number(form.credit_limit).toLocaleString()}` }]);
-      setForm({ name: '', last_four: '', credit_limit: '', billing_day: '1', due_day: '15' });
+      setForm({ name: '', last_four: '', credit_limit: '', billing_day: '1', due_day: '15', initial_balance: '' });
     } finally {
       setBusy(false);
     }
@@ -734,6 +735,19 @@ function StepCards({ onNext, onPrev }) {
             />
             <Hint>Día del mes en que vence tu pago para no generar intereses.</Hint>
           </div>
+        </div>
+        <div>
+          <label className="label">Saldo actual (lo que debes hoy)</label>
+          <input
+            className="input"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            value={form.initial_balance}
+            onChange={(e) => setForm({ ...form, initial_balance: e.target.value })}
+          />
+          <Hint>¿Cuánto debes en esta tarjeta en este momento? Deja en 0 si no tienes saldo pendiente.</Hint>
         </div>
         <button type="submit" disabled={busy} className="btn-primary justify-center py-2">
           <Plus size={15} /> {busy ? 'Agregando...' : 'Agregar tarjeta'}

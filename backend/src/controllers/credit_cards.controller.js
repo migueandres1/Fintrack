@@ -53,18 +53,43 @@ export async function list(req, res) {
 
 export async function create(req, res) {
   const uid = req.userId;
-  const { name, last_four, credit_limit, billing_day, due_day, color, notes } = req.body;
+  const { name, last_four, credit_limit, billing_day, due_day, color, notes, initial_balance } = req.body;
+  const conn = await pool.getConnection();
   try {
-    const [result] = await pool.query(
+    await conn.beginTransaction();
+
+    const [result] = await conn.query(
       `INSERT INTO credit_cards (user_id, name, last_four, credit_limit, billing_day, due_day, color, notes)
        VALUES (?,?,?,?,?,?,?,?)`,
       [uid, name, last_four || null, credit_limit || 0, billing_day || 1, due_day || 20, color || '#6366f1', notes || null]
     );
-    const [[card]] = await pool.query('SELECT * FROM credit_cards WHERE id = ?', [result.insertId]);
-    res.status(201).json({ ...card, current_balance: 0, utilization: 0 });
+    const cardId = result.insertId;
+
+    const initBalance = Number(initial_balance) || 0;
+    if (initBalance > 0) {
+      // Find "Deuda" category (id=15) or fallback to first expense category
+      const [[debtCat]] = await conn.query(
+        `SELECT id FROM categories WHERE (user_id IS NULL OR user_id = ?) AND type = 'expense' AND name IN ('Deuda','Otros gastos') ORDER BY name = 'Deuda' DESC LIMIT 1`,
+        [uid]
+      );
+      const catId = debtCat?.id || 15;
+      const today = new Date().toISOString().slice(0, 10);
+      await conn.query(
+        `INSERT INTO transactions (user_id, category_id, type, amount, description, txn_date, credit_card_id, is_card_payment)
+         VALUES (?, ?, 'expense', ?, 'Saldo inicial', ?, ?, 0)`,
+        [uid, catId, initBalance, today, cardId]
+      );
+    }
+
+    await conn.commit();
+    const [[card]] = await conn.query('SELECT * FROM credit_cards WHERE id = ?', [cardId]);
+    res.status(201).json({ ...card, current_balance: initBalance, utilization: credit_limit > 0 ? +((initBalance / Number(credit_limit)) * 100).toFixed(1) : 0 });
   } catch (err) {
+    await conn.rollback();
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
+  } finally {
+    conn.release();
   }
 }
 

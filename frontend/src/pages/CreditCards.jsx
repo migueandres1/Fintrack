@@ -10,7 +10,7 @@ import clsx  from 'clsx';
 const COLORS = ['#6366f1','#22c55e','#f59e0b','#3b82f6','#ec4899','#14b8a6','#f97316','#8b5cf6','#ef4444'];
 
 const EMPTY_CARD = {
-  name: '', last_four: '', credit_limit: '', billing_day: 1, due_day: 20,
+  name: '', last_four: '', credit_limit: '', billing_day: 1, due_day: 20, initial_balance: '',
   color: '#6366f1', notes: '',
 };
 const EMPTY_PAY = {
@@ -362,6 +362,19 @@ export default function CreditCards() {
               <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
                 value={form.credit_limit} onChange={e => setForm({ ...form, credit_limit: e.target.value })} />
             </div>
+            <div className="col-span-2">
+              <label className="label">{editing ? 'Saldo actual' : 'Saldo inicial (lo que debes ahora)'}</label>
+              <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
+                value={editing ? '' : form.initial_balance}
+                onChange={e => setForm({ ...form, initial_balance: e.target.value })}
+                disabled={!!editing}
+                title={editing ? 'Registra un pago para actualizar el saldo' : ''}
+              />
+              {!editing && <p className="text-xs text-[var(--text-muted)] mt-1">El monto que ya debes al agregar la tarjeta. Deja en 0 si empiezas sin deuda.</p>}
+              {editing && <p className="text-xs text-[var(--text-muted)] mt-1">Para ajustar el saldo registra un pago o transacción.</p>}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Día de corte</label>
               <input className="input" type="number" min="1" max="31" placeholder="1"

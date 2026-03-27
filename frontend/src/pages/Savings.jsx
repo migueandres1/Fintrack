@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Plus, Pencil, Trash2, PiggyBank, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, PiggyBank, CheckCircle2, Landmark } from 'lucide-react';
 import { useStore }  from '../store/index.js';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import { fmt, localDate } from '../utils/format.js';
@@ -11,13 +11,13 @@ const COLORS  = ['#6366f1','#22c55e','#f59e0b','#3b82f6','#ec4899','#14b8a6','#f
 const ICONS   = ['piggy-bank','shield','plane','laptop','home','car','heart','star','gift','book'];
 
 const EMPTY_GOAL = {
-  name: '', target_amount: '', deadline: '', icon: 'piggy-bank', color: '#6366f1',
+  name: '', target_amount: '', deadline: '', icon: 'piggy-bank', color: '#6366f1', account_id: '',
 };
 const EMPTY_CONTRIB = {
   amount: '', contrib_date: localDate(), notes: '',
 };
 
-function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, onDeleteContrib }) {
+function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, onDeleteContrib, accounts = [] }) {
   const [detail,   setDetail]   = useState(null);
   const [expanded, setExpanded] = useState(false);
 
@@ -68,6 +68,12 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, 
                     ({daysLeft > 0 ? `${daysLeft} días` : 'Vencida'})
                   </span>
                 )}
+              </p>
+            )}
+            {goal.account_name && (
+              <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 mt-0.5">
+                <Landmark size={11} />
+                {goal.account_name}
               </p>
             )}
           </div>
@@ -180,7 +186,7 @@ function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, 
 const EMPTY_EDIT_CONTRIB = { amount: '', contrib_date: localDate(), notes: '' };
 
 export default function Savings() {
-  const { goals, goalsLoading, fetchGoals, createGoal, updateGoal, deleteGoal, addContribution, user, billingStatus } = useStore();
+  const { goals, goalsLoading, fetchGoals, createGoal, updateGoal, deleteGoal, addContribution, user, billingStatus, accounts, fetchAccounts } = useStore();
   const currency = user?.currency || 'USD';
 
   const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
@@ -200,7 +206,7 @@ export default function Savings() {
   const [busy,             setBusy]             = useState(false);
   const submittingRef = useRef(false);
 
-  useEffect(() => { fetchGoals(); }, []);
+  useEffect(() => { fetchGoals(); fetchAccounts(); }, []);
 
   const openCreate = () => {
     if (effectivePlan === 'free' && goals.length >= 1) { setUpgradeModal(true); return; }
@@ -208,7 +214,7 @@ export default function Savings() {
   };
   const openEdit   = (g) => {
     setEditing(g);
-    setForm({ name: g.name, target_amount: g.target_amount, deadline: g.deadline || '', icon: g.icon, color: g.color });
+    setForm({ name: g.name, target_amount: g.target_amount, deadline: g.deadline || '', icon: g.icon, color: g.color, account_id: g.account_id || '' });
     setModal(true);
   };
   const openContrib = (g) => { setContribGoal(g); setContribForm(EMPTY_CONTRIB); setContribModal(true); };
@@ -319,7 +325,7 @@ export default function Savings() {
           {active.length > 0 && (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {active.map((g) => (
-                <GoalCard key={g.id} goal={g} currency={currency}
+                <GoalCard key={g.id} goal={g} currency={currency} accounts={accounts}
                   onEdit={openEdit} onDelete={setDeleting} onContrib={openContrib}
                   onEditContrib={openEditContrib} onDeleteContrib={openDelContrib} />
               ))}
@@ -332,7 +338,7 @@ export default function Savings() {
               </h3>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {completed.map((g) => (
-                  <GoalCard key={g.id} goal={g} currency={currency}
+                  <GoalCard key={g.id} goal={g} currency={currency} accounts={accounts}
                     onEdit={openEdit} onDelete={setDeleting} onContrib={openContrib}
                     onEditContrib={openEditContrib} onDeleteContrib={openDelContrib} />
                 ))}
@@ -364,6 +370,19 @@ export default function Savings() {
                 onChange={e => setForm({ ...form, deadline: e.target.value })} />
             </div>
           </div>
+
+          {accounts.length > 0 && (
+            <div>
+              <label className="label">Cuenta donde guardas este ahorro</label>
+              <select className="input" value={form.account_id}
+                onChange={e => setForm({ ...form, account_id: e.target.value })}>
+                <option value="">— Sin vincular —</option>
+                {accounts.filter(a => a.is_active).map(a => (
+                  <option key={a.id} value={a.id}>{a.name}{a.currency ? ` (${a.currency})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Color picker */}
           <div>
