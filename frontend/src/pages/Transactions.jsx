@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine, FileUp, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, Spinner, Empty, ProgressBar } from '../components/ui/index.jsx';
-import OcrModal     from '../components/OcrModal.jsx';
-import UpgradeModal from '../components/UpgradeModal.jsx';
+import OcrModal             from '../components/OcrModal.jsx';
+import StatementImportModal from '../components/StatementImportModal.jsx';
+import UpgradeModal         from '../components/UpgradeModal.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
 
@@ -48,14 +49,64 @@ export default function Transactions() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState(null);
-  const [ocrModal,     setOcrModal]     = useState(false);
-  const [upgradeModal, setUpgradeModal] = useState(false);
+  const [ocrModal,       setOcrModal]       = useState(false);
+  const [statementModal, setStatementModal] = useState(false);
+  const [upgradeModal,   setUpgradeModal]   = useState(false);
+  const [ocrScanning,    setOcrScanning]    = useState(false);
+  const cameraInputRef = useRef(null);
   const billingStatus = useStore((s) => s.billingStatus);
   const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
 
   function openOcr() {
     if (effectivePlan === 'free') { setUpgradeModal(true); return; }
     setOcrModal(true);
+  }
+
+  async function handleCameraOcr(file) {
+    if (!file) return;
+    setOcrScanning(true);
+    const form = new FormData();
+    // Compress large images before upload
+    let uploadFile = file;
+    if (file.type.startsWith('image/') && file.size > 1.2 * 1024 * 1024) {
+      try {
+        const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        const ratio = Math.min(1, 1920 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(bitmap.width * ratio);
+        canvas.height = Math.round(bitmap.height * ratio);
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        uploadFile = await new Promise(res => canvas.toBlob(b => res(new File([b], 'receipt.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.82));
+      } catch { /* use original */ }
+    }
+    form.append('receipt', uploadFile);
+    try {
+      const { data } = await api.post('/ocr/receipt', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
+      });
+      const expCats = categories.filter(c => c.type === 'expense');
+      const merchant = (data.merchant || '').toLowerCase();
+      let suggestedCat = '';
+      if (/super|walmart|market|tienda|colonia|precio|mall/.test(merchant))
+        suggestedCat = expCats.find(c => /alimenta|comida|food/i.test(c.name))?.id || '';
+      else if (/gas|shell|texaco|petro|combustible/.test(merchant))
+        suggestedCat = expCats.find(c => /transport/i.test(c.name))?.id || '';
+      else if (/restaur|pizza|burger|sushi|cafe|coffee|mcdonalds|kfc/.test(merchant))
+        suggestedCat = expCats.find(c => /alimenta|comida|food/i.test(c.name))?.id || '';
+      else if (/farmacia|medic|clinica|hospital|doctor/.test(merchant))
+        suggestedCat = expCats.find(c => /salud/i.test(c.name))?.id || '';
+      setForm(f => ({
+        ...f,
+        type:        'expense',
+        description: data.merchant || f.description,
+        amount:      data.amount   ? String(data.amount) : f.amount,
+        txn_date:    data.date     || f.txn_date,
+        category_id: suggestedCat  || f.category_id,
+      }));
+    } catch { /* fail silently — user can fill manually */ }
+    finally { setOcrScanning(false); }
   }
 
   // Recurring state
@@ -116,6 +167,7 @@ export default function Transactions() {
       fetchTransactions(filters);
       fetchDebts();
       fetchGoals();
+      if (payload.credit_card_id) fetchCreditCards();
       api.get('/transactions/summary').then(r => setSummary(r.data)).catch(() => { });
     } catch (err) {
       if (err.response?.status === 403 && err.response?.data?.code === 'LIMIT_REACHED') {
@@ -238,6 +290,7 @@ export default function Transactions() {
           <button onClick={openRecurring} className="btn-ghost"><RefreshCw size={15} /><span className="hidden sm:inline">Recurrentes</span></button>
           <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost"><Filter size={15} /><span className="hidden sm:inline">Filtros</span></button>
           <button onClick={openOcr} className="btn-ghost" title="Escanear recibo"><ScanLine size={15} /></button>
+          <button onClick={() => { if (effectivePlan === 'free') { setUpgradeModal(true); return; } setStatementModal(true); }} className="btn-ghost" title="Importar estado de cuenta"><FileUp size={15} /></button>
           <button onClick={openCreate} className="btn-primary"><Plus size={15} /><span className="hidden sm:inline">Nueva</span></button>
         </div>
       </div>
@@ -370,6 +423,36 @@ export default function Transactions() {
       {/* ── Modal nueva/editar transacción ── */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar transacción' : 'Nueva transacción'}>
         <form onSubmit={save} className="space-y-4">
+
+          {/* OCR: scan receipt button (PRO) — only for new transactions */}
+          {!editing && effectivePlan !== 'free' && (
+            <>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={e => { handleCameraOcr(e.target.files[0]); e.target.value = ''; }}
+              />
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={ocrScanning}
+                className={clsx(
+                  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm transition-all',
+                  ocrScanning
+                    ? 'border-brand-400 bg-brand-500/10 text-brand-400'
+                    : 'border-dashed border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400 hover:text-brand-400 hover:bg-brand-500/5'
+                )}
+              >
+                {ocrScanning
+                  ? <><Loader2 size={15} className="animate-spin" /> Analizando recibo...</>
+                  : <><ScanLine size={15} /> Escanear recibo con cámara</>}
+              </button>
+            </>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             {['income', 'expense'].map((tp) => (
               <button key={tp} type="button"
@@ -720,6 +803,20 @@ export default function Transactions() {
         open={ocrModal}
         onClose={() => setOcrModal(false)}
         onConfirm={handleOcrConfirm}
+        categories={categories}
+        creditCards={creditCards}
+        accounts={accounts}
+        currency={currency}
+      />
+
+      <StatementImportModal
+        open={statementModal}
+        onClose={() => setStatementModal(false)}
+        onImported={() => {
+          setStatementModal(false);
+          fetchTransactions(filters);
+          api.get('/transactions/summary').then(r => setSummary(r.data)).catch(() => {});
+        }}
         categories={categories}
         creditCards={creditCards}
         accounts={accounts}

@@ -157,6 +157,27 @@ export const useStore = create(
         return data;
       },
 
+      importStatement: async (file) => {
+        const form = new FormData();
+        form.append('file', file);
+        const { data } = await api.post('/transactions/import-statement', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return data; // { transactions: [...], total }
+      },
+
+      confirmStatementImport: async (transactions, extra = {}) => {
+        const form = new FormData();
+        form.append('confirm', 'true');
+        form.append('transactions', JSON.stringify(transactions));
+        if (extra.credit_card_id) form.append('credit_card_id', extra.credit_card_id);
+        if (extra.account_id)     form.append('account_id',     extra.account_id);
+        const { data } = await api.post('/transactions/import-statement', form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return data; // { imported }
+      },
+
       updateTransaction: async (id, payload) => {
         const { data } = await api.put(`/transactions/${id}`, payload);
         return data;

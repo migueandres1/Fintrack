@@ -57,12 +57,13 @@ r.post('/billing/portal',   authenticate, billing.createPortal);
 r.get('/dashboard', authenticate, dash.getDashboard);
 
 // ── Transactions ───────────────────────────────────────────────────────────
-r.get   ('/transactions',        authenticate, txn.list);
-r.post  ('/transactions',        authenticate, requireLimit('tx_month', countTxMonth), txn.create);
-r.put   ('/transactions/:id',    authenticate, txn.update);
-r.delete('/transactions/:id',    authenticate, txn.remove);
-r.get   ('/transactions/summary',authenticate, txn.summary);
-r.get   ('/transactions/export', authenticate, txn.exportCsv);
+r.get   ('/transactions',                authenticate, txn.list);
+r.post  ('/transactions',                authenticate, requireLimit('tx_month', countTxMonth), txn.create);
+r.put   ('/transactions/:id',            authenticate, txn.update);
+r.delete('/transactions/:id',            authenticate, txn.remove);
+r.get   ('/transactions/summary',        authenticate, txn.summary);
+r.get   ('/transactions/export',         authenticate, txn.exportCsv);
+r.post  ('/transactions/import-statement', authenticate, requireFeature('ocr'), upload.single('file'), txn.importStatement);
 
 // ── Categories ─────────────────────────────────────────────────────────────
 r.get   ('/categories',          authenticate, cats.listVisible);

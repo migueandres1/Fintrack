@@ -105,6 +105,41 @@ export async function getDashboard(req, res) {
       },
     };
 
+    // ── Pulso del presupuesto mes actual ────────────────────────────
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const [[budgetTotals]] = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) AS total_budget
+       FROM budgets WHERE user_id = ? AND month = ?`,
+      [uid, currentMonth]
+    );
+    const [[spentTotals]] = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) AS total_spent
+       FROM transactions
+       WHERE user_id = ? AND type = 'expense'
+         AND (credit_card_id IS NULL OR is_card_payment = 1)
+         AND DATE_FORMAT(txn_date, '%Y-%m') = ?`,
+      [uid, currentMonth]
+    );
+    const totalBudget = +(budgetTotals.total_budget || 0);
+    const totalSpent  = +(spentTotals.total_spent   || 0);
+    let budget_pulse  = null;
+    if (totalBudget > 0) {
+      const now2        = new Date();
+      const daysInMonth = new Date(now2.getFullYear(), now2.getMonth() + 1, 0).getDate();
+      const dayOfMonth  = now2.getDate();
+      const pct         = Math.round((totalSpent / totalBudget) * 100);
+      const expectedPct = Math.round((dayOfMonth / daysInMonth) * 100);
+      budget_pulse = {
+        total_budget: +totalBudget.toFixed(2),
+        total_spent:  +totalSpent.toFixed(2),
+        pct,
+        days_in_month: daysInMonth,
+        day_of_month:  dayOfMonth,
+        expected_pct:  expectedPct,
+        status: pct > 100 ? 'over' : pct > expectedPct + 15 ? 'warning' : 'on_track',
+      };
+    }
+
     res.json({
       balance: {
         total:          +((balance.total_income || 0) - (balance.total_expenses || 0)).toFixed(2),
@@ -121,6 +156,7 @@ export async function getDashboard(req, res) {
       goals,
       recent_transactions: recent,
       score,
+      budget_pulse,
     });
   } catch (err) {
     console.error(err);

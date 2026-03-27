@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   Wallet, TrendingUp, TrendingDown, CreditCard, PiggyBank, Bell, ArrowRight,
   ChevronDown, ChevronUp, RefreshCw, Scissors, CalendarClock, ShieldCheck, Landmark,
-  Plus, ArrowUpCircle, ArrowDownCircle,
+  Plus, ArrowUpCircle, ArrowDownCircle, Target, ScanLine, Loader2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useStore }   from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { StatCard, ProgressBar, Spinner, Modal } from '../components/ui/index.jsx';
+import api  from '../services/api.js';
 import clsx from 'clsx';
 
 // Próxima fecha de un día-del-mes (este mes si aún no pasó, si no el siguiente)
@@ -100,6 +101,51 @@ const EMPTY_QUICK = {
   extra_principal: '0', payment_method: 'cash',
 };
 
+function BudgetPulseCard({ pulse, currency }) {
+  const { total_budget, total_spent, pct, days_in_month, day_of_month, expected_pct, status } = pulse;
+  const free = Math.max(0, total_budget - total_spent);
+  const barColor = status === 'over' ? '#f43f5e' : status === 'warning' ? '#f59e0b' : '#22c55e';
+  const statusLabel = status === 'over' ? 'Presupuesto superado' : status === 'warning' ? 'Cuidado — vas rápido' : 'Vas bien';
+  const statusEmoji = status === 'over' ? '🔴' : status === 'warning' ? '🟡' : '🟢';
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Target size={15} className="text-[var(--text-muted)]" />
+          <h3 className="text-display font-bold text-sm">Pulso del mes</h3>
+        </div>
+        <Link to="/app/budget" className="text-xs text-brand-400 hover:underline flex items-center gap-1">
+          Ver detalle <ArrowRight size={12} />
+        </Link>
+      </div>
+      <p className="text-sm text-[var(--text-muted)] mb-3">
+        Llevas el <span className="font-semibold text-[var(--text)]">{pct}%</span> de tu presupuesto — día {day_of_month} de {days_in_month}
+      </p>
+      <div className="relative h-2.5 rounded-full bg-[var(--surface-2)] overflow-hidden mb-1">
+        <div
+          className="absolute left-0 top-0 h-full rounded-full transition-all"
+          style={{ width: `${Math.min(100, pct)}%`, background: barColor }}
+        />
+        {/* Marcador de ritmo esperado */}
+        <div
+          className="absolute top-0 h-full w-0.5 bg-white/40"
+          style={{ left: `${Math.min(100, expected_pct)}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-[11px] text-[var(--text-muted)] mb-3">
+        <span>{pct}% gastado</span>
+        <span className="flex items-center gap-1">{statusEmoji} {statusLabel} · esperado {expected_pct}%</span>
+      </div>
+      <div className="flex gap-4 text-xs">
+        <div><p className="text-[var(--text-muted)]">Presupuestado</p><p className="font-semibold">{fmt.currency(total_budget, currency)}</p></div>
+        <div><p className="text-[var(--text-muted)]">Gastado</p><p className="font-semibold">{fmt.currency(total_spent, currency)}</p></div>
+        <div><p className="text-[var(--text-muted)]">Disponible</p><p className="font-semibold" style={{ color: free === 0 ? '#f43f5e' : barColor }}>{fmt.currency(free, currency)}</p></div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const {
     dashboard, dashLoading, fetchDashboard, user,
@@ -113,9 +159,13 @@ export default function Dashboard() {
 
   const [period, setPeriod]             = useState('biweekly');
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [quickModal, setQuickModal]     = useState(false);
-  const [quickForm,  setQuickForm]      = useState(EMPTY_QUICK);
-  const [quickBusy,  setQuickBusy]      = useState(false);
+  const [quickModal,   setQuickModal]   = useState(false);
+  const [quickForm,    setQuickForm]    = useState(EMPTY_QUICK);
+  const [quickBusy,    setQuickBusy]    = useState(false);
+  const [ocrScanning,  setOcrScanning]  = useState(false);
+  const cameraInputRef = useRef(null);
+  const billingStatus  = useStore(s => s.billingStatus);
+  const effectivePlan  = billingStatus?.plan ?? user?.plan ?? 'free';
 
   useEffect(() => {
     fetchDashboard();
@@ -158,6 +208,54 @@ export default function Dashboard() {
   }));
   const quickCats      = categories.filter(c => !quickForm.type || c.type === quickForm.type);
   const quickPayMethod = quickForm.payment_method || 'cash';
+
+  const handleCameraOcr = async (file) => {
+    if (!file) return;
+    setOcrScanning(true);
+    let uploadFile = file;
+    if (file.type.startsWith('image/') && file.size > 1.2 * 1024 * 1024) {
+      try {
+        const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        const ratio  = Math.min(1, 1920 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(bitmap.width  * ratio);
+        canvas.height = Math.round(bitmap.height * ratio);
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        uploadFile = await new Promise(res =>
+          canvas.toBlob(b => res(new File([b], 'receipt.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.82)
+        );
+      } catch { /* use original */ }
+    }
+    const form = new FormData();
+    form.append('receipt', uploadFile);
+    try {
+      const { data } = await api.post('/ocr/receipt', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
+      });
+      const expCats = categories.filter(c => c.type === 'expense');
+      const merchant = (data.merchant || '').toLowerCase();
+      let suggestedCat = '';
+      if (/super|walmart|market|tienda|colonia|precio|mall/.test(merchant))
+        suggestedCat = expCats.find(c => /alimenta|comida|food/i.test(c.name))?.id || '';
+      else if (/gas|shell|texaco|petro|combustible/.test(merchant))
+        suggestedCat = expCats.find(c => /transport/i.test(c.name))?.id || '';
+      else if (/restaur|pizza|burger|sushi|cafe|coffee|mcdonalds|kfc/.test(merchant))
+        suggestedCat = expCats.find(c => /alimenta|comida|food/i.test(c.name))?.id || '';
+      else if (/farmacia|medic|clinica|hospital|doctor/.test(merchant))
+        suggestedCat = expCats.find(c => /salud/i.test(c.name))?.id || '';
+      setQuickForm(f => ({
+        ...f,
+        type:        'expense',
+        description: data.merchant || f.description,
+        amount:      data.amount   ? String(data.amount) : f.amount,
+        txn_date:    data.date     || f.txn_date,
+        category_id: suggestedCat  || f.category_id,
+      }));
+    } catch { /* fail silently */ }
+    finally { setOcrScanning(false); }
+  };
 
   /* ── Distribución de ingresos ─────────────────────────────── */
   const activeRec   = recurring.filter(r => r.is_active);
@@ -251,6 +349,9 @@ export default function Dashboard() {
         <StatCard label="Gastos este mes"    value={fmt.currency(d?.this_month?.expenses, currency)}  icon={TrendingDown} color="rose" />
         <StatCard label="Deuda total activa" value={fmt.currency(d?.total_debt, currency)}            icon={CreditCard}  color="amber" />
       </div>
+
+      {/* Pulso del presupuesto */}
+      {d?.budget_pulse && <BudgetPulseCard pulse={d.budget_pulse} currency={currency} />}
 
       {/* Tendencia 6 meses */}
       {trendData.length > 0 && (
@@ -649,6 +750,36 @@ export default function Dashboard() {
       {/* Modal registrar transacción rápida */}
       <Modal open={quickModal} onClose={() => setQuickModal(false)} title="Registrar transacción">
         <form onSubmit={saveQuick} className="space-y-4">
+
+          {/* OCR: escanear recibo con cámara (PRO) */}
+          {effectivePlan !== 'free' && (
+            <>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={e => { handleCameraOcr(e.target.files[0]); e.target.value = ''; }}
+              />
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={ocrScanning}
+                className={clsx(
+                  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm transition-all',
+                  ocrScanning
+                    ? 'border-brand-400 bg-brand-500/10 text-brand-400'
+                    : 'border-dashed border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400 hover:text-brand-400 hover:bg-brand-500/5'
+                )}
+              >
+                {ocrScanning
+                  ? <><Loader2 size={15} className="animate-spin" /> Analizando recibo...</>
+                  : <><ScanLine size={15} /> Escanear recibo con cámara</>}
+              </button>
+            </>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             {['income', 'expense'].map((tp) => (
               <button key={tp} type="button"
