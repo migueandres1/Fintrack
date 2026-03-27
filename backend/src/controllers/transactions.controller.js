@@ -396,6 +396,9 @@ export async function importStatement(req, res) {
       return res.status(400).json({ error: 'No hay transacciones para importar' });
     }
 
+    const creditCardId = req.body.credit_card_id ? Number(req.body.credit_card_id) : null;
+    const accountId    = req.body.account_id     ? Number(req.body.account_id)     : null;
+
     // Fetch user categories for validation
     const [cats] = await pool.query(
       'SELECT id FROM categories WHERE user_id IS NULL OR user_id = ?', [uid]
@@ -410,11 +413,11 @@ export async function importStatement(req, res) {
         const { date, description, amount, type, category_id } = txn;
         if (!date || !amount || !type) continue;
         const catId = category_id && validCatIds.has(Number(category_id)) ? category_id : null;
-        if (!catId) continue; // skip if no valid category
+        if (!catId) continue;
         await conn.query(
-          `INSERT INTO transactions (user_id, type, amount, description, txn_date, category_id, payment_method)
-           VALUES (?, ?, ?, ?, ?, ?, 'import')`,
-          [uid, type, Math.abs(Number(amount)), description || '', date, catId]
+          `INSERT INTO transactions (user_id, type, amount, description, txn_date, category_id, credit_card_id, account_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [uid, type, Math.abs(Number(amount)), description || '', date, catId, creditCardId, accountId]
         );
         imported++;
       }
@@ -439,9 +442,10 @@ export async function importStatement(req, res) {
     const mimeType = req.file.mimetype || 'application/pdf';
 
     const client  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const message = await client.messages.create({
+    const message = await client.beta.messages.create({
       model:      'claude-haiku-4-5-20251001',
       max_tokens: 4096,
+      betas:      ['pdfs-2024-09-25'],
       messages: [{
         role: 'user',
         content: [
@@ -497,6 +501,9 @@ Reglas:
     res.json({ transactions, total: transactions.length });
   } catch (err) {
     console.error('Statement import error:', err.message);
+    if (err.status === 429) {
+      return res.status(429).json({ error: 'Límite de solicitudes de IA alcanzado. Espera un momento e intenta de nuevo.' });
+    }
     res.status(500).json({ error: 'Error al analizar el estado de cuenta: ' + err.message });
   }
 }

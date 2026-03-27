@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { FileUp, X, Loader2, FileText, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { FileUp, X, Loader2, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { Modal } from './ui/index.jsx';
 import { fmt }   from '../utils/format.js';
 import { useStore } from '../store/index.js';
@@ -8,13 +8,15 @@ import clsx from 'clsx';
 /**
  * StatementImportModal
  * Props:
- *   open       – boolean
- *   onClose    – () => void
- *   onImported – (count: number) => void  (called after successful import)
- *   categories – array of category objects
- *   currency   – string
+ *   open        – boolean
+ *   onClose     – () => void
+ *   onImported  – (count: number) => void
+ *   categories  – array of category objects
+ *   creditCards – array of credit card objects
+ *   accounts    – array of bank account objects
+ *   currency    – string
  */
-export default function StatementImportModal({ open, onClose, onImported, categories = [], currency = 'USD' }) {
+export default function StatementImportModal({ open, onClose, onImported, categories = [], creditCards = [], accounts = [], currency = 'USD' }) {
   const inputRef = useRef(null);
   const { importStatement, confirmStatementImport } = useStore();
 
@@ -22,12 +24,13 @@ export default function StatementImportModal({ open, onClose, onImported, catego
   const [dragging,   setDragging]   = useState(false);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState(null);
-  const [rows,       setRows]       = useState(null); // preview array
-  const [selected,   setSelected]   = useState(null); // Set of selected indices
+  const [rows,       setRows]       = useState(null);
+  const [selected,   setSelected]   = useState(null);
   const [busy,       setBusy]       = useState(false);
+  const [sourceType, setSourceType] = useState('none');   // 'none' | 'account' | 'card'
+  const [sourceId,   setSourceId]   = useState('');
 
-  const expenseCategories = categories.filter(c => c.type === 'expense' || !c.type);
-  const allCategories     = categories;
+  const allCategories = categories;
 
   const reset = () => {
     setFile(null);
@@ -37,16 +40,15 @@ export default function StatementImportModal({ open, onClose, onImported, catego
     setRows(null);
     setSelected(null);
     setBusy(false);
+    setSourceType('none');
+    setSourceId('');
   };
 
   const handleClose = () => { reset(); onClose(); };
 
   const pickFile = (f) => {
     if (!f) return;
-    if (f.type !== 'application/pdf') {
-      setError('Solo se aceptan archivos PDF.');
-      return;
-    }
+    if (f.type !== 'application/pdf') { setError('Solo se aceptan archivos PDF.'); return; }
     setFile(f);
     setError(null);
     setRows(null);
@@ -94,8 +96,11 @@ export default function StatementImportModal({ open, onClose, onImported, catego
     const toImport = rows.filter((_, i) => selected.has(i));
     if (toImport.length === 0) return;
     setBusy(true);
+    const extra = sourceType === 'card'    ? { credit_card_id: Number(sourceId) }
+                : sourceType === 'account' ? { account_id:     Number(sourceId) }
+                : {};
     try {
-      const result = await confirmStatementImport(toImport);
+      const result = await confirmStatementImport(toImport, extra);
       onImported(result.imported);
       handleClose();
     } catch (err) {
@@ -106,6 +111,8 @@ export default function StatementImportModal({ open, onClose, onImported, catego
   };
 
   const selectedCount = selected?.size ?? 0;
+  const hasAccounts   = accounts.length > 0;
+  const hasCards      = creditCards.length > 0;
 
   if (!open) return null;
 
@@ -155,6 +162,72 @@ export default function StatementImportModal({ open, onClose, onImported, catego
               )}
             </div>
 
+            {/* Selector de cuenta / tarjeta */}
+            {(hasAccounts || hasCards) && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-[var(--text)]">Vincular a</label>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => { setSourceType('none'); setSourceId(''); }}
+                    className={clsx('px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                      sourceType === 'none'
+                        ? 'border-brand-400 bg-brand-500/15 text-brand-400'
+                        : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400/50')}
+                  >
+                    Sin vincular
+                  </button>
+                  {hasAccounts && (
+                    <button
+                      type="button"
+                      onClick={() => { setSourceType('account'); setSourceId(accounts[0].id); }}
+                      className={clsx('px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                        sourceType === 'account'
+                          ? 'border-brand-400 bg-brand-500/15 text-brand-400'
+                          : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400/50')}
+                    >
+                      Cuenta bancaria
+                    </button>
+                  )}
+                  {hasCards && (
+                    <button
+                      type="button"
+                      onClick={() => { setSourceType('card'); setSourceId(creditCards[0].id); }}
+                      className={clsx('px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                        sourceType === 'card'
+                          ? 'border-brand-400 bg-brand-500/15 text-brand-400'
+                          : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400/50')}
+                    >
+                      Tarjeta de crédito
+                    </button>
+                  )}
+                </div>
+
+                {sourceType === 'account' && (
+                  <select
+                    value={sourceId}
+                    onChange={(e) => setSourceId(e.target.value)}
+                    className="input w-full text-sm"
+                  >
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}{a.currency ? ` (${a.currency})` : ''}</option>
+                    ))}
+                  </select>
+                )}
+                {sourceType === 'card' && (
+                  <select
+                    value={sourceId}
+                    onChange={(e) => setSourceId(e.target.value)}
+                    className="input w-full text-sm"
+                  >
+                    {creditCards.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}{c.last_four ? ` ···${c.last_four}` : ''}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
             {error && (
               <div className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 text-rose-500 text-sm">
                 <AlertCircle size={16} className="shrink-0 mt-0.5" />
@@ -187,6 +260,17 @@ export default function StatementImportModal({ open, onClose, onImported, catego
                 <X size={13} /> Subir otro
               </button>
             </div>
+
+            {sourceType !== 'none' && (
+              <p className="text-xs text-[var(--text-muted)]">
+                Se vincularán a:{' '}
+                <span className="font-medium text-[var(--text)]">
+                  {sourceType === 'card'
+                    ? creditCards.find(c => c.id === Number(sourceId))?.name
+                    : accounts.find(a => a.id === Number(sourceId))?.name}
+                </span>
+              </p>
+            )}
 
             <div className="overflow-x-auto rounded-xl border border-[var(--border)] max-h-80 overflow-y-auto">
               <table className="w-full text-xs">
