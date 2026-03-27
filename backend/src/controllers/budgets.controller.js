@@ -124,7 +124,7 @@ export async function categoryDetail(req, res) {
 
   try {
     const [transactions] = await pool.query(
-      `SELECT t.id, t.description, t.amount, t.txn_date, t.notes,
+      `SELECT t.id, t.description, t.amount, t.txn_date,
               t.credit_card_id, cc.name AS card_name, cc.last_four
        FROM transactions t
        LEFT JOIN credit_cards cc ON cc.id = t.credit_card_id
