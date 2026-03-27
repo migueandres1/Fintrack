@@ -32,20 +32,37 @@ function LucideIcon({ name, size = 15, style, className }) {
 const FREQ_LABEL = { weekly: 'Semanal', biweekly: 'Quincenal', monthly: 'Mensual', yearly: 'Anual' };
 
 // ── Category detail modal (transactions + history) ────────────────────────────
-function CategoryDetailModal({ open, onClose, item, month, currency }) {
-  const { fetchBudgetCategoryDetail, fetchBudgetCategoryHistory } = useStore();
-  const [txns,    setTxns]    = useState([]);
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
+function CategoryDetailModal({ open, onClose, item, month, currency, onBudgetRefresh }) {
+  const { fetchBudgetCategoryDetail, fetchBudgetCategoryHistory, deleteTransaction } = useStore();
+  const [txns,      setTxns]      = useState([]);
+  const [history,   setHistory]   = useState([]);
+  const [loading,   setLoading]   = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => {
-    if (!open || !item) return;
+  const load = () => {
+    if (!item) return;
     setLoading(true);
     Promise.all([
       fetchBudgetCategoryDetail(item.category_id, month),
       fetchBudgetCategoryHistory(item.category_id, month, 4),
     ]).then(([t, h]) => { setTxns(t); setHistory(h); }).finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!open || !item) return;
+    load();
   }, [open, item?.category_id, month]);
+
+  const handleDeleteTxn = async (id) => {
+    setDeletingId(id);
+    try {
+      await deleteTransaction(id);
+      setTxns(prev => prev.filter(t => t.id !== id));
+      if (onBudgetRefresh) onBudgetRefresh();
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const total    = txns.reduce((s, t) => s + Number(t.amount), 0);
   const maxSpent = Math.max(...history.map(h => Math.max(h.spent, h.budget || 0)), 1);
@@ -113,17 +130,27 @@ function CategoryDetailModal({ open, onClose, item, month, currency }) {
           ) : (
             <div className="space-y-1 max-h-60 overflow-y-auto">
               {txns.map(t => (
-                <div key={t.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-[var(--surface-2)] transition-colors">
-                  <div className="min-w-0">
+                <div key={t.id} className="group flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-[var(--surface-2)] transition-colors">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{t.description || item?.category_name}</p>
                     <p className="text-xs text-[var(--text-muted)]">
                       {fmt.date(t.txn_date)}
                       {t.card_name && ` · ${t.card_name}${t.last_four ? ` ···${t.last_four}` : ''}`}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-mono text-rose-500 flex-shrink-0 ml-3">
-                    -{fmt.currency(t.amount, currency)}
-                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                    <span className="text-sm font-semibold text-mono text-rose-500">
+                      -{fmt.currency(t.amount, currency)}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteTxn(t.id)}
+                      disabled={deletingId === t.id}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 text-rose-400 transition-all"
+                      title="Eliminar transacción"
+                    >
+                      <LucideIcons.Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -466,9 +493,15 @@ export default function Budget() {
   };
 
   const confirmDeleteLine = async () => {
-    await deleteBudgetLine(delLine.id);
+    const id = delLine.id;
     setDelLine(null);
-    fetchBudgets(month);
+    try {
+      await deleteBudgetLine(id);
+      fetchBudgets(month);
+    } catch (err) {
+      console.error('Error al eliminar línea de presupuesto:', err);
+      fetchBudgets(month);
+    }
   };
 
   const handleCopy = async () => {
@@ -916,7 +949,8 @@ export default function Budget() {
 
       {/* ── Modals ── */}
       <CategoryDetailModal open={!!detailItem} onClose={() => setDetailItem(null)}
-        item={detailItem} month={month} currency={currency} />
+        item={detailItem} month={month} currency={currency}
+        onBudgetRefresh={() => fetchBudgets(month)} />
 
       <ImportDebtModal open={!!importDebt} onClose={() => setImportDebt(null)}
         debt={importDebt} categories={categories} onImport={handleImportDebt} />

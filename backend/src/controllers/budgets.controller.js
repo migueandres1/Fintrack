@@ -264,9 +264,10 @@ export async function remove(req, res) {
   const uid = req.userId;
   const id  = req.params.id;
   try {
-    await pool.query('DELETE FROM budgets WHERE id = ? AND user_id = ?', [uid, id]);
-    res.json({ success: true });
+    const [result] = await pool.query('DELETE FROM budgets WHERE id = ? AND user_id = ?', [id, uid]);
+    res.json({ success: true, affectedRows: result.affectedRows });
   } catch (err) {
+    console.error('[budgets.remove] error:', err);
     res.status(500).json({ error: 'Error interno' });
   }
 }

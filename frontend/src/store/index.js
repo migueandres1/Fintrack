@@ -367,6 +367,22 @@ export const useStore = create(
       // Delete a single budget line by its id
       deleteBudgetLine: async (id) => {
         await api.delete(`/budgets/${id}`);
+        // Optimistic local state update so UI responds immediately
+        set((s) => ({
+          budgets: {
+            ...s.budgets,
+            items: s.budgets.items
+              .map(item => {
+                const newLines = item.lines.filter(l => l.id !== id);
+                return {
+                  ...item,
+                  lines:  newLines,
+                  budget: newLines.reduce((sum, l) => sum + l.amount, 0),
+                };
+              })
+              .filter(item => item.lines.length > 0 || item.spent > 0),
+          },
+        }));
       },
 
       copyBudgetsFromLastMonth: async (targetMonth) => {
