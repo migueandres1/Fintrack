@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Wallet, TrendingUp, TrendingDown, CreditCard, PiggyBank, Bell, ArrowRight,
   ChevronDown, ChevronUp, RefreshCw, Scissors, CalendarClock, ShieldCheck, Landmark,
-  Plus, ArrowUpCircle, ArrowDownCircle,
+  Plus, ArrowUpCircle, ArrowDownCircle, Target,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -99,6 +99,51 @@ const EMPTY_QUICK = {
   txn_date: localDate(), debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '',
   extra_principal: '0', payment_method: 'cash',
 };
+
+function BudgetPulseCard({ pulse, currency }) {
+  const { total_budget, total_spent, pct, days_in_month, day_of_month, expected_pct, status } = pulse;
+  const free = Math.max(0, total_budget - total_spent);
+  const barColor = status === 'over' ? '#f43f5e' : status === 'warning' ? '#f59e0b' : '#22c55e';
+  const statusLabel = status === 'over' ? 'Presupuesto superado' : status === 'warning' ? 'Cuidado — vas rápido' : 'Vas bien';
+  const statusEmoji = status === 'over' ? '🔴' : status === 'warning' ? '🟡' : '🟢';
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Target size={15} className="text-[var(--text-muted)]" />
+          <h3 className="text-display font-bold text-sm">Pulso del mes</h3>
+        </div>
+        <Link to="/app/budget" className="text-xs text-brand-400 hover:underline flex items-center gap-1">
+          Ver detalle <ArrowRight size={12} />
+        </Link>
+      </div>
+      <p className="text-sm text-[var(--text-muted)] mb-3">
+        Llevas el <span className="font-semibold text-[var(--text)]">{pct}%</span> de tu presupuesto — día {day_of_month} de {days_in_month}
+      </p>
+      <div className="relative h-2.5 rounded-full bg-[var(--surface-2)] overflow-hidden mb-1">
+        <div
+          className="absolute left-0 top-0 h-full rounded-full transition-all"
+          style={{ width: `${Math.min(100, pct)}%`, background: barColor }}
+        />
+        {/* Marcador de ritmo esperado */}
+        <div
+          className="absolute top-0 h-full w-0.5 bg-white/40"
+          style={{ left: `${Math.min(100, expected_pct)}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-[11px] text-[var(--text-muted)] mb-3">
+        <span>{pct}% gastado</span>
+        <span className="flex items-center gap-1">{statusEmoji} {statusLabel} · esperado {expected_pct}%</span>
+      </div>
+      <div className="flex gap-4 text-xs">
+        <div><p className="text-[var(--text-muted)]">Presupuestado</p><p className="font-semibold">{fmt.currency(total_budget, currency)}</p></div>
+        <div><p className="text-[var(--text-muted)]">Gastado</p><p className="font-semibold">{fmt.currency(total_spent, currency)}</p></div>
+        <div><p className="text-[var(--text-muted)]">Disponible</p><p className="font-semibold" style={{ color: free === 0 ? '#f43f5e' : barColor }}>{fmt.currency(free, currency)}</p></div>
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const {
@@ -251,6 +296,9 @@ export default function Dashboard() {
         <StatCard label="Gastos este mes"    value={fmt.currency(d?.this_month?.expenses, currency)}  icon={TrendingDown} color="rose" />
         <StatCard label="Deuda total activa" value={fmt.currency(d?.total_debt, currency)}            icon={CreditCard}  color="amber" />
       </div>
+
+      {/* Pulso del presupuesto */}
+      {d?.budget_pulse && <BudgetPulseCard pulse={d.budget_pulse} currency={currency} />}
 
       {/* Tendencia 6 meses */}
       {trendData.length > 0 && (

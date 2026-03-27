@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine } from 'lucide-react';
+import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine, FileUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, Spinner, Empty, ProgressBar } from '../components/ui/index.jsx';
-import OcrModal     from '../components/OcrModal.jsx';
-import UpgradeModal from '../components/UpgradeModal.jsx';
+import OcrModal             from '../components/OcrModal.jsx';
+import StatementImportModal from '../components/StatementImportModal.jsx';
+import UpgradeModal         from '../components/UpgradeModal.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
 
@@ -48,8 +49,9 @@ export default function Transactions() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState(null);
-  const [ocrModal,     setOcrModal]     = useState(false);
-  const [upgradeModal, setUpgradeModal] = useState(false);
+  const [ocrModal,       setOcrModal]       = useState(false);
+  const [statementModal, setStatementModal] = useState(false);
+  const [upgradeModal,   setUpgradeModal]   = useState(false);
   const billingStatus = useStore((s) => s.billingStatus);
   const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
 
@@ -116,6 +118,7 @@ export default function Transactions() {
       fetchTransactions(filters);
       fetchDebts();
       fetchGoals();
+      if (payload.credit_card_id) fetchCreditCards();
       api.get('/transactions/summary').then(r => setSummary(r.data)).catch(() => { });
     } catch (err) {
       if (err.response?.status === 403 && err.response?.data?.code === 'LIMIT_REACHED') {
@@ -238,6 +241,7 @@ export default function Transactions() {
           <button onClick={openRecurring} className="btn-ghost"><RefreshCw size={15} /><span className="hidden sm:inline">Recurrentes</span></button>
           <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost"><Filter size={15} /><span className="hidden sm:inline">Filtros</span></button>
           <button onClick={openOcr} className="btn-ghost" title="Escanear recibo"><ScanLine size={15} /></button>
+          <button onClick={() => { if (effectivePlan === 'free') { setUpgradeModal(true); return; } setStatementModal(true); }} className="btn-ghost" title="Importar estado de cuenta"><FileUp size={15} /></button>
           <button onClick={openCreate} className="btn-primary"><Plus size={15} /><span className="hidden sm:inline">Nueva</span></button>
         </div>
       </div>
@@ -723,6 +727,18 @@ export default function Transactions() {
         categories={categories}
         creditCards={creditCards}
         accounts={accounts}
+        currency={currency}
+      />
+
+      <StatementImportModal
+        open={statementModal}
+        onClose={() => setStatementModal(false)}
+        onImported={() => {
+          setStatementModal(false);
+          fetchTransactions(filters);
+          api.get('/transactions/summary').then(r => setSummary(r.data)).catch(() => {});
+        }}
+        categories={categories}
         currency={currency}
       />
     </div>

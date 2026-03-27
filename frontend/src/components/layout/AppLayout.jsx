@@ -9,22 +9,42 @@ import {
 import { useStore } from '../../store/index.js';
 import clsx        from 'clsx';
 
-// ── Nav completa (sidebar desktop) ────────────────────────────────────────
-const NAV = [
-  { to: '/app',                icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/app/transactions',   icon: ArrowRightLeft,  label: 'Transacciones' },
-  { to: '/app/accounts',       icon: Landmark,        label: 'Cuentas' },
-  { to: '/app/debts',          icon: Wallet,          label: 'Deudas' },
-  { to: '/app/credit-cards',   icon: CreditCard,      label: 'Tarjetas' },
-  { to: '/app/savings',        icon: PiggyBank,       label: 'Metas de ahorro' },
-  { to: '/app/budget',         icon: BarChart2,       label: 'Presupuesto' },
-  { to: '/app/planning',       icon: CalendarRange,   label: 'Planificación' },
-  { to: '/app/categories',     icon: Tags,            label: 'Categorías' },
-];
-
-const DOCS_NAV = [
-  { to: '/app/pricing', icon: Sparkles, label: 'Planes' },
-  { to: '/app/guide',   icon: BookOpen, label: 'Guía de usuario' },
+// ── Nav agrupada (sidebar desktop) ────────────────────────────────────────
+const NAV_GROUPS = [
+  {
+    label: null,
+    items: [
+      { to: '/app', icon: LayoutDashboard, label: 'Dashboard' },
+    ],
+  },
+  {
+    label: 'Dinero',
+    items: [
+      { to: '/app/transactions', icon: ArrowRightLeft, label: 'Transacciones' },
+      { to: '/app/accounts',     icon: Landmark,       label: 'Cuentas' },
+      { to: '/app/credit-cards', icon: CreditCard,     label: 'Tarjetas' },
+    ],
+  },
+  {
+    label: 'Control',
+    items: [
+      { to: '/app/budget',    icon: BarChart2,     label: 'Presupuesto' },
+      { to: '/app/planning',  icon: CalendarRange, label: 'Planificación', proOnly: true },
+    ],
+  },
+  {
+    label: 'Objetivos',
+    items: [
+      { to: '/app/debts',   icon: Wallet,    label: 'Deudas' },
+      { to: '/app/savings', icon: PiggyBank, label: 'Metas de ahorro' },
+    ],
+  },
+  {
+    label: 'Config',
+    items: [
+      { to: '/app/categories', icon: Tags, label: 'Categorías' },
+    ],
+  },
 ];
 
 // ── Bottom tab bar (mobile): 4 tabs principales + "Más" ───────────────────
@@ -34,14 +54,13 @@ const BOTTOM_TABS = [
   { to: '/app/budget',       icon: BarChart2,       label: 'Presupuesto' },
   { to: '/app/accounts',     icon: Landmark,        label: 'Cuentas' },
 ];
-const MORE_ITEMS = [
+const MORE_ITEMS_BASE = [
   { to: '/app/debts',        icon: Wallet,        label: 'Deudas' },
   { to: '/app/credit-cards', icon: CreditCard,    label: 'Tarjetas' },
   { to: '/app/savings',      icon: PiggyBank,     label: 'Metas de ahorro' },
-  { to: '/app/planning',     icon: CalendarRange, label: 'Planificación' },
   { to: '/app/categories',   icon: Tags,          label: 'Categorías' },
-  { to: '/app/pricing', icon: Sparkles, label: 'Planes' },
-  { to: '/app/guide',   icon: BookOpen, label: 'Guía' },
+  { to: '/app/planning',     icon: CalendarRange, label: 'Planificación', proOnly: true },
+  { to: '/app/pricing',      icon: Sparkles,      label: 'Planes' },
 ];
 
 // ── Sidebar desktop ────────────────────────────────────────────────────────
@@ -68,6 +87,10 @@ function UserRow({ user, onLogout }) {
 }
 
 function Sidebar({ onLogout, user, darkMode, toggleDark }) {
+  const billingStatus = useStore((s) => s.billingStatus);
+  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
+  const nav = useNavigate();
+
   return (
     <div className="flex flex-col h-full px-3 py-5">
       <div className="flex items-center gap-2.5 px-4 mb-6">
@@ -77,53 +100,70 @@ function Sidebar({ onLogout, user, darkMode, toggleDark }) {
         <span className="text-display text-white font-bold text-lg tracking-tight">FinTrack</span>
       </div>
 
-      <nav className="flex flex-col gap-1 flex-1 pt-2">
-        {NAV.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/app'}
-            className={({ isActive }) =>
-              clsx(
-                'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
-                isActive
-                  ? 'bg-brand-500/15 text-brand-400'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
-              )
-            }
-          >
-            <Icon size={18} />
-            {label}
-          </NavLink>
-        ))}
+      <nav className="flex flex-col gap-0.5 flex-1 pt-1 overflow-y-auto">
+        {NAV_GROUPS.map((group, gi) => {
+          const visibleItems = group.items.filter(item => !(item.proOnly && effectivePlan === 'free'));
+          if (visibleItems.length === 0) return null;
+          return (
+            <div key={gi} className={gi > 0 ? 'mt-3' : ''}>
+              {group.label && (
+                <p className="px-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/25">
+                  {group.label}
+                </p>
+              )}
+              {visibleItems.map(({ to, icon: Icon, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/app'}
+                  className={({ isActive }) =>
+                    clsx(
+                      'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
+                      isActive
+                        ? 'bg-brand-500/15 text-brand-400'
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    )
+                  }
+                >
+                  <Icon size={18} />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
+          );
+        })}
       </nav>
 
-      <div className="pt-3 border-t border-white/5 flex flex-col gap-1">
-        {DOCS_NAV.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              clsx(
-                'flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium transition-all',
-                isActive
-                  ? 'bg-brand-500/15 text-brand-400'
-                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-              )
-            }
-          >
-            <Icon size={15} />
-            {label}
-          </NavLink>
-        ))}
-      </div>
-
-      <div className="mt-2 pt-3 border-t border-white/5 flex flex-col gap-2">
+      <div className="mt-2 pt-3 border-t border-white/5 flex flex-col gap-1">
+        <NavLink
+          to="/app/pricing"
+          className={({ isActive }) =>
+            clsx(
+              'flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium transition-all',
+              isActive ? 'bg-brand-500/15 text-brand-400' : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+            )
+          }
+        >
+          <Sparkles size={14} />
+          Planes
+        </NavLink>
+        <NavLink
+          to="/app/guide"
+          className={({ isActive }) =>
+            clsx(
+              'flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium transition-all',
+              isActive ? 'bg-brand-500/15 text-brand-400' : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+            )
+          }
+        >
+          <BookOpen size={14} />
+          Guía de usuario
+        </NavLink>
         <button
           onClick={toggleDark}
-          className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-all"
+          className="flex items-center gap-3 px-4 py-2 rounded-xl text-xs text-white/40 hover:text-white/70 hover:bg-white/5 transition-all"
         >
-          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          {darkMode ? <Sun size={14} /> : <Moon size={14} />}
           {darkMode ? 'Modo claro' : 'Modo oscuro'}
         </button>
         <UserRow user={user} onLogout={onLogout} />
@@ -135,7 +175,7 @@ function Sidebar({ onLogout, user, darkMode, toggleDark }) {
 // ── Bottom tab bar ─────────────────────────────────────────────────────────
 function BottomTabBar({ moreOpen, setMoreOpen }) {
   const location = useLocation();
-  const isMoreActive = MORE_ITEMS.some(n => location.pathname.startsWith(n.to))
+  const isMoreActive = MORE_ITEMS_BASE.some(n => location.pathname.startsWith(n.to))
     || location.pathname.startsWith('/app/profile');
 
   return (
@@ -187,6 +227,10 @@ function BottomTabBar({ moreOpen, setMoreOpen }) {
 // ── Bottom sheet "Más" ─────────────────────────────────────────────────────
 function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
   const nav = useNavigate();
+  const billingStatus = useStore((s) => s.billingStatus);
+  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
+  const moreItems = MORE_ITEMS_BASE.filter(item => !(item.proOnly && effectivePlan === 'free'));
+
   if (!open) return null;
   return (
     <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end">
@@ -201,7 +245,7 @@ function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
         </div>
 
         <div className="px-4 pb-2 pt-1 grid grid-cols-2 gap-2">
-          {MORE_ITEMS.map(({ to, icon: Icon, label }) => (
+          {moreItems.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}

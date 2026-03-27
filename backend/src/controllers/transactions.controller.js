@@ -1,4 +1,5 @@
-import pool from '../config/db.js';
+import pool     from '../config/db.js';
+import Anthropic from '@anthropic-ai/sdk';
 
 // ── Helpers de integridad ──────────────────────────────────────────────────
 
@@ -345,5 +346,157 @@ export async function getCategories(req, res) {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'Error interno' });
+  }
+}
+
+// ── Keyword → category heuristic (same as OcrModal on frontend) ───────────
+const CATEGORY_KEYWORDS = [
+  { keywords: ['super', 'walmart', 'pricesmart', 'bodega', 'paiz', 'dispensa', 'maxi', 'suli', 'la torre', 'la colonia', 'hiper', 'market'],   name: 'Alimentación' },
+  { keywords: ['restaurante', 'restaurant', 'burger', 'pizza', 'pollo', 'sushi', 'taco', 'comida', 'cafe', 'coffee', 'starbucks', 'mcdonalds', 'kfc', 'subway', 'dominos', 'wendys'], name: 'Restaurantes' },
+  { keywords: ['gasolinera', 'combustible', 'gasolina', 'shell', 'texaco', 'esso', 'puma', 'gulf', 'gas station', 'uber', 'taxi', 'bus', 'transporte', 'bolt'], name: 'Transporte' },
+  { keywords: ['farmacia', 'pharmacy', 'medic', 'doctor', 'hospital', 'clinica', 'dental', 'salud', 'laboratorio'], name: 'Salud' },
+  { keywords: ['netflix', 'spotify', 'amazon', 'disney', 'youtube', 'streaming', 'suscripcion', 'subscription', 'apple', 'google play'], name: 'Entretenimiento' },
+  { keywords: ['luz', 'energia', 'water', 'agua', 'internet', 'telefono', 'celular', 'claro', 'tigo', 'movistar', 'eegsa', 'empagua', 'servicios', 'electricity'], name: 'Servicios' },
+  { keywords: ['ropa', 'zapatos', 'tienda', 'store', 'fashion', 'clothing', 'mall', 'centro comercial', 'el trébol'], name: 'Ropa' },
+  { keywords: ['sueldo', 'salario', 'nomina', 'payroll', 'transferencia', 'deposito', 'ingreso', 'salary', 'pago recibido'], name: 'Ingresos' },
+];
+
+function suggestCategory(description, categories) {
+  const lower = (description || '').toLowerCase();
+  for (const { keywords, name } of CATEGORY_KEYWORDS) {
+    if (keywords.some(k => lower.includes(k))) {
+      const match = categories.find(c => c.name.toLowerCase().includes(name.toLowerCase()));
+      if (match) return match.id;
+    }
+  }
+  return null;
+}
+
+// POST /transactions/import-statement
+// Step 1 (no confirm): analyze PDF with Claude, return preview array
+// Step 2 (confirm=true): bulk-insert the provided transactions array
+export async function importStatement(req, res) {
+  const uid = req.userId;
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ error: 'OCR no configurado. Agrega ANTHROPIC_API_KEY en el .env' });
+  }
+
+  // Step 2: confirm import
+  if (req.body.confirm === 'true' || req.body.confirm === true) {
+    let transactions;
+    try {
+      transactions = typeof req.body.transactions === 'string'
+        ? JSON.parse(req.body.transactions)
+        : req.body.transactions;
+    } catch {
+      return res.status(400).json({ error: 'Formato de transacciones inválido' });
+    }
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return res.status(400).json({ error: 'No hay transacciones para importar' });
+    }
+
+    // Fetch user categories for validation
+    const [cats] = await pool.query(
+      'SELECT id FROM categories WHERE user_id IS NULL OR user_id = ?', [uid]
+    );
+    const validCatIds = new Set(cats.map(c => c.id));
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      let imported = 0;
+      for (const txn of transactions) {
+        const { date, description, amount, type, category_id } = txn;
+        if (!date || !amount || !type) continue;
+        const catId = category_id && validCatIds.has(Number(category_id)) ? category_id : null;
+        if (!catId) continue; // skip if no valid category
+        await conn.query(
+          `INSERT INTO transactions (user_id, type, amount, description, txn_date, category_id, payment_method)
+           VALUES (?, ?, ?, ?, ?, ?, 'import')`,
+          [uid, type, Math.abs(Number(amount)), description || '', date, catId]
+        );
+        imported++;
+      }
+      await conn.commit();
+      return res.json({ imported });
+    } catch (err) {
+      await conn.rollback();
+      console.error('Import statement error:', err);
+      return res.status(500).json({ error: 'Error al importar transacciones' });
+    } finally {
+      conn.release();
+    }
+  }
+
+  // Step 1: analyze PDF
+  if (!req.file) {
+    return res.status(400).json({ error: 'No se recibió ningún archivo' });
+  }
+
+  try {
+    const base64   = req.file.buffer.toString('base64');
+    const mimeType = req.file.mimetype || 'application/pdf';
+
+    const client  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const message = await client.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type:   'document',
+            source: { type: 'base64', media_type: mimeType, data: base64 },
+          },
+          {
+            type: 'text',
+            text: `Eres un extractor de transacciones bancarias. Analiza este estado de cuenta y extrae TODAS las transacciones.
+Devuelve SOLO un JSON array con este formato exacto (sin texto adicional, sin markdown):
+[{"date":"YYYY-MM-DD","description":"texto","amount":123.45,"type":"expense"}]
+Reglas:
+- amount: siempre número positivo
+- type: "expense" para cargos, retiros, compras, débitos; "income" para depósitos, abonos, créditos
+- Para estados de tarjeta de crédito: excluir pagos al saldo (son transferencias internas)
+- Si la fecha solo tiene mes/año, usa el último día del mes
+- Si no puedes extraer transacciones, devuelve []`,
+          },
+        ],
+      }],
+    });
+
+    const raw = message.content[0]?.text?.trim() || '[]';
+    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, raw];
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonMatch[1].trim());
+    } catch {
+      return res.status(422).json({ error: 'No se pudo leer el estado de cuenta. Asegúrate de que sea un PDF de texto (no escaneado).' });
+    }
+
+    if (!Array.isArray(parsed)) {
+      return res.status(422).json({ error: 'No se pudo leer el estado de cuenta. Asegúrate de que sea un PDF de texto (no escaneado).' });
+    }
+
+    // Fetch user categories for suggestions
+    const [categories] = await pool.query(
+      'SELECT id, name FROM categories WHERE (user_id IS NULL OR user_id = ?) AND type = ?',
+      [uid, 'expense']
+    );
+
+    const transactions = parsed
+      .filter(t => t.date && t.amount && t.type)
+      .map(t => ({
+        date:        t.date,
+        description: t.description || '',
+        amount:      +Math.abs(Number(t.amount)).toFixed(2),
+        type:        t.type === 'income' ? 'income' : 'expense',
+        category_id: suggestCategory(t.description, categories),
+      }));
+
+    res.json({ transactions, total: transactions.length });
+  } catch (err) {
+    console.error('Statement import error:', err.message);
+    res.status(500).json({ error: 'Error al analizar el estado de cuenta: ' + err.message });
   }
 }
