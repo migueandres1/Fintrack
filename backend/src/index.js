@@ -122,7 +122,11 @@ app.use('/docs/technical', express.static(path.join(DOCS_ROOT, 'technical')));
 // ── Seguridad global (después de docs para no bloquear CDN de Docsify) ────
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'capacitor://localhost',   // iOS WebView (Capacitor)
+    'http://localhost',         // Android WebView (Capacitor)
+  ],
   credentials: true,
 }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));

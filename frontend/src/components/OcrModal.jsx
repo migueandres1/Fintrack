@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { captureReceiptPhoto } from '../utils/captureReceipt.js';
 
 // Comprime imágenes grandes antes de subir (fotos de cámara móvil ~6MB → ~400KB)
 // Usa createImageBitmap con imageOrientation: 'from-image' para respetar la
@@ -143,6 +145,20 @@ export default function OcrModal({ open, onClose, onConfirm, categories = [], cr
   return (
     <Modal open={open} onClose={handleClose} title="Escanear recibo">
       <div className="space-y-4">
+
+        {/* Botón cámara nativa — solo visible en iOS/Android */}
+        {!result && Capacitor.isNativePlatform() && (
+          <button
+            type="button"
+            onClick={async () => {
+              const file = await captureReceiptPhoto();
+              if (file) loadFile(file);
+            }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-[var(--border)] text-sm text-[var(--text-muted)] hover:border-brand-400 hover:text-brand-400 hover:bg-brand-500/5 transition-colors"
+          >
+            <ScanLine size={15} /> Tomar foto del recibo
+          </button>
+        )}
 
         {/* Zona de drop */}
         {!result && (

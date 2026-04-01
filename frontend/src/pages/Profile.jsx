@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { openExternalUrl } from '../utils/openUrl.js';
 import { User, Lock, Eye, EyeOff, Check, CreditCard, Crown, Users, Zap, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/index.js';
@@ -87,7 +88,7 @@ export default function Profile() {
     setPortalBusy(true);
     try {
       const url = await createPortal();
-      if (url) window.location.href = url;
+      if (url) await openExternalUrl(url);
     } catch {
       // portal error — silencioso
     } finally {

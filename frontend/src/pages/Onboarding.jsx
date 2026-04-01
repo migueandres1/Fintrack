@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/index.js';
 import api from '../services/api.js';
+import { openExternalUrl } from '../utils/openUrl.js';
 
 const CURRENCIES = ['USD','EUR','MXN','COP','ARS','BRL','GTQ','HNL','NIO','CRC','PEN','CLP'];
 const FREQUENCIES = [
@@ -960,7 +961,7 @@ export default function Onboarding() {
     try {
       await completeOnboarding();
       const url = await startCheckout(priceKey);
-      if (url) window.location.href = url;
+      if (url) await openExternalUrl(url);
     } catch {
       setBusy(false);
     }

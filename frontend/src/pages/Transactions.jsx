@@ -9,6 +9,9 @@ import StatementImportModal from '../components/StatementImportModal.jsx';
 import UpgradeModal         from '../components/UpgradeModal.jsx';
 import api from '../services/api.js';
 import clsx from 'clsx';
+import { Capacitor } from '@capacitor/core';
+import { Browser }   from '@capacitor/browser';
+import { captureReceiptPhoto } from '../utils/captureReceipt.js';
 
 const EMPTY_FORM = {
   type: 'expense', category_id: '', amount: '', description: '',
@@ -185,9 +188,21 @@ export default function Transactions() {
     fetchTransactions(filters);
   };
 
-  const exportCsv = () => {
-    const params = new URLSearchParams({ from: filters.from || '', to: filters.to || '' });
-    window.open(`/api/transactions/export?${params}`, '_blank');
+  const exportCsv = async () => {
+    const params  = new URLSearchParams({ from: filters.from || '', to: filters.to || '' });
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+    const exportUrl = `${baseUrl}/transactions/export?${params}`;
+    if (Capacitor.isNativePlatform()) {
+      // En la app nativa adjuntamos el token como query param porque el browser
+      // externo no puede enviar el header Authorization.
+      try {
+        const stored = JSON.parse(localStorage.getItem('fintrack-store') || '{}');
+        const token  = stored?.state?.token || '';
+        await Browser.open({ url: `${exportUrl}&token=${encodeURIComponent(token)}` });
+      } catch { /* falla silenciosa */ }
+    } else {
+      window.open(exportUrl, '_blank');
+    }
   };
 
   // OCR: pre-fill form with extracted receipt data
@@ -437,7 +452,14 @@ export default function Transactions() {
               />
               <button
                 type="button"
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={async () => {
+                  if (Capacitor.isNativePlatform()) {
+                    const file = await captureReceiptPhoto();
+                    if (file) handleCameraOcr(file);
+                  } else {
+                    cameraInputRef.current?.click();
+                  }
+                }}
                 disabled={ocrScanning}
                 className={clsx(
                   'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm transition-all',
