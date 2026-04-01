@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store/index.js';
 import PricingSection from '../components/PricingSection.jsx';
+import { openExternalUrl } from '../utils/openUrl.js';
 
 export default function Pricing() {
   const { user, fetchBillingStatus, startCheckout, createPortal, billingStatus } = useStore();
@@ -14,7 +15,7 @@ export default function Pricing() {
     setLoading(true); setError('');
     try {
       const url = await startCheckout(priceKey);
-      if (url) window.location.href = url;
+      if (url) await openExternalUrl(url);
     } catch {
       setError('No se pudo iniciar el pago. Intentá de nuevo.');
     } finally {
@@ -25,7 +26,7 @@ export default function Pricing() {
   async function handlePortal() {
     try {
       const url = await createPortal();
-      if (url) window.location.href = url;
+      if (url) await openExternalUrl(url);
     } catch {
       setError('No se pudo abrir el portal de facturación.');
     }

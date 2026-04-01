@@ -7,6 +7,8 @@ import {
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useStore }   from '../store/index.js';
+import { Capacitor }  from '@capacitor/core';
+import { captureReceiptPhoto } from '../utils/captureReceipt.js';
 import { fmt, localDate } from '../utils/format.js';
 import { StatCard, ProgressBar, Spinner, Modal } from '../components/ui/index.jsx';
 import api  from '../services/api.js';
@@ -764,7 +766,14 @@ export default function Dashboard() {
               />
               <button
                 type="button"
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={async () => {
+                  if (Capacitor.isNativePlatform()) {
+                    const file = await captureReceiptPhoto();
+                    if (file) handleCameraOcr(file);
+                  } else {
+                    cameraInputRef.current?.click();
+                  }
+                }}
                 disabled={ocrScanning}
                 className={clsx(
                   'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm transition-all',
