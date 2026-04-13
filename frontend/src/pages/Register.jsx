@@ -35,8 +35,8 @@ export default function Register() {
           <div className="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center mb-3">
             <TrendingUp size={24} className="text-white" />
           </div>
-          <h1 className="text-display font-bold text-2xl">FinTrack</h1>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Crea tu cuenta gratis</p>
+          <h1 className="text-display font-semibold text-2xl">MoniFlow</h1>
+          <p className="text-[var(--text-muted)] text-sm mt-1">En tu idioma. Bajo tu control.</p>
         </div>
 
         <div className="card">

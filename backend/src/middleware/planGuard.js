@@ -56,6 +56,28 @@ export function isPaidPlan(plan) {
   return ['pro', 'familia', 'beta'].includes(plan);
 }
 
+// ── Middleware: bloquea si el usuario no tiene plan 'familia' activo ───────
+export function requireFamiliaPlan() {
+  return async (req, res, next) => {
+    try {
+      const user = await fetchUserPlan(req.userId);
+      const plan = getEffectivePlan(user);
+      req.plan = plan;
+      if (plan !== 'familia') {
+        return res.status(403).json({
+          error: 'Esta función requiere el Plan Familiar.',
+          code: 'FAMILIA_REQUIRED',
+          current_plan: plan,
+        });
+      }
+      next();
+    } catch (err) {
+      console.error('planGuard.requireFamiliaPlan:', err);
+      next(err);
+    }
+  };
+}
+
 // ── Fetch plan y downgrade automático si beta o trial expiraron ───────────
 async function fetchUserPlan(userId) {
   const [rows] = await pool.query(

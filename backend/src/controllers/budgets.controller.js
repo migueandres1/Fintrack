@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import { getUserFamily } from '../utils/family.js';
 
 // GET /budgets?month=YYYY-MM
 export async function list(req, res) {
@@ -34,15 +35,19 @@ export async function list(req, res) {
       budgetByCategory[cid].lines.push({ id: row.id, name: row.name, amount: Number(row.amount) });
     }
 
-    // Actual spending per category this month
+    // Actual spending per category this month (personal + family)
+    const fam = await getUserFamily(uid);
+    const fid = fam?.family_id ?? null;
+    const spendClause = fid ? '(user_id = ? OR family_id = ?)' : 'user_id = ?';
+    const spendParams = fid ? [uid, fid, month] : [uid, month];
     const [spending] = await pool.query(
       `SELECT category_id, SUM(amount) AS spent
        FROM transactions
-       WHERE user_id = ? AND type = 'expense'
+       WHERE ${spendClause} AND type = 'expense'
          AND (credit_card_id IS NULL OR is_card_payment = 1)
          AND DATE_FORMAT(txn_date, '%Y-%m') = ?
        GROUP BY category_id`,
-      [uid, month]
+      spendParams
     );
     const spentMap = {};
     spending.forEach(s => { spentMap[s.category_id] = Number(s.spent) || 0; });

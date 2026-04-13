@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ArrowRightLeft, CreditCard,
   PiggyBank, Moon, Sun, LogOut, TrendingUp,
   CalendarRange, Wallet, BarChart2, Landmark,
-  MoreHorizontal, Tags, BookOpen, Sparkles, AlertTriangle,
+  MoreHorizontal, Tags, BookOpen, Sparkles, AlertTriangle, Users,
 } from 'lucide-react';
 import { useStore } from '../../store/index.js';
 import clsx        from 'clsx';
@@ -42,7 +42,8 @@ const NAV_GROUPS = [
   {
     label: 'Config',
     items: [
-      { to: '/app/categories', icon: Tags, label: 'Categorías' },
+      { to: '/app/categories', icon: Tags,  label: 'Categorías' },
+      { to: '/app/family',     icon: Users, label: 'Familia', familiaOnly: true },
     ],
   },
 ];
@@ -59,6 +60,7 @@ const MORE_ITEMS_BASE = [
   { to: '/app/credit-cards', icon: CreditCard,    label: 'Tarjetas' },
   { to: '/app/savings',      icon: PiggyBank,     label: 'Metas de ahorro' },
   { to: '/app/categories',   icon: Tags,          label: 'Categorías' },
+  { to: '/app/family',       icon: Users,         label: 'Familia' },
   { to: '/app/planning',     icon: CalendarRange, label: 'Planificación', proOnly: true },
   { to: '/app/pricing',      icon: Sparkles,      label: 'Planes' },
 ];
@@ -97,11 +99,12 @@ function Sidebar({ onLogout, user, darkMode, toggleDark }) {
         <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center">
           <TrendingUp size={16} className="text-white" />
         </div>
-        <span className="text-display text-white font-bold text-lg tracking-tight">FinTrack</span>
+        <span className="text-display text-white font-bold text-lg tracking-tight">MoniFlow</span>
       </div>
 
       <nav className="flex flex-col gap-0.5 flex-1 pt-1 overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => {
+          // proOnly items hidden on free; familiaOnly items always shown (page shows upgrade msg)
           const visibleItems = group.items.filter(item => !(item.proOnly && effectivePlan === 'free'));
           if (visibleItems.length === 0) return null;
           return (
@@ -333,7 +336,7 @@ export default function AppLayout() {
           <div className="w-6 h-6 rounded bg-brand-500 flex items-center justify-center">
             <TrendingUp size={12} className="text-white" />
           </div>
-          <span className="text-display font-bold text-sm">FinTrack</span>
+          <span className="text-display font-bold text-sm">MoniFlow</span>
         </div>
 
         {/* Banner prueba terminada */}

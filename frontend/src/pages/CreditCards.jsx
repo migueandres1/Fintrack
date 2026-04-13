@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, DollarSign, Calculator } from 'lucide-react';
+import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, Calculator } from 'lucide-react';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
 import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
@@ -14,7 +14,7 @@ const EMPTY_CARD = {
   color: '#6366f1', notes: '',
 };
 const EMPTY_PAY = {
-  amount: '', txn_date: localDate(), notes: '',
+  amount: '', txn_date: localDate(), notes: '', account_id: '',
 };
 
 // Simulates months to pay off and total interest given a fixed monthly payment
@@ -237,6 +237,7 @@ export default function CreditCards() {
   const {
     creditCards, creditCardsLoading, fetchCreditCards,
     createCreditCard, updateCreditCard, deleteCreditCard, addCardPayment,
+    accounts, fetchAccounts,
     user, categories, fetchCategories, billingStatus,
   } = useStore();
   const currency = user?.currency || 'USD';
@@ -253,7 +254,7 @@ export default function CreditCards() {
   const [payForm,      setPayForm]      = useState(EMPTY_PAY);
   const [busy,         setBusy]         = useState(false);
 
-  useEffect(() => { fetchCreditCards(); fetchCategories(); }, []);
+  useEffect(() => { fetchCreditCards(); fetchCategories(); fetchAccounts(); }, []);
 
   const openCreate = () => {
     if (effectivePlan === 'free' && creditCards.length >= 1) { setUpgradeModal(true); return; }
@@ -435,14 +436,28 @@ export default function CreditCards() {
             </div>
           </div>
           <div>
+            <label className="label">Cuenta bancaria de débito</label>
+            <select
+              className="input"
+              value={payForm.account_id}
+              onChange={e => setPayForm({ ...payForm, account_id: e.target.value })}
+            >
+              <option value="">— Sin vincular cuenta —</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            {payForm.account_id && (
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                El pago se descontará del saldo de esta cuenta.
+              </p>
+            )}
+          </div>
+          <div>
             <label className="label">Notas (opcional)</label>
             <input className="input" type="text" placeholder="Ej: Pago mínimo, pago total"
               value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} />
           </div>
-          <p className="text-xs text-[var(--text-muted)]">
-            <DollarSign size={11} className="inline mr-0.5" />
-            Este pago se descontará de tu saldo disponible.
-          </p>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setPayModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center">

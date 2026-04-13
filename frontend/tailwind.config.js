@@ -5,35 +5,38 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans:    ['"DM Sans"',    'system-ui', 'sans-serif'],
-        display: ['"Syne"',       'system-ui', 'sans-serif'],
-        mono:    ['"DM Mono"',    'monospace'],
+        sans:    ['"DM Sans"',            'system-ui', 'sans-serif'],
+        display: ['"Cormorant Garamond"', 'Georgia',   'serif'],
+        mono:    ['"DM Mono"',            'monospace'],
       },
       colors: {
+        // Agua Caribe — el acento que impacta
         brand: {
-          50:  '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
+          50:   '#e4f8f3', // Bruma
+          100:  '#c0f0e4', // Niebla Marina
+          200:  '#c0f0e4',
+          300:  '#55d8b4', // Jade
+          400:  '#55d8b4', // Jade / hover dark
+          500:  '#00b894', // Agua Caribe — principal
+          600:  '#009a7a', // Caribe Oscuro — hover light
+          700:  '#007a5a',
+          800:  '#005a3a',
+          900:  '#003a20',
         },
+        // Selva Nocturna — base de identidad
         surface: {
-          50:  '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#080f1a',
-          600: '#475569',
+          50:  '#f0f5f3', // Blanco Roto — background light
+          100: '#d0e0da', // Niebla — bordes light
+          200: '#d0e0da',
+          400: '#5a9070', // Musgo — texto sec. dark
+          600: '#2e5c3e', // Pino — bordes dark
+          700: '#1e3d2a', // Bosque — hovers oscuros
+          800: '#152a1e', // Selva Oscura — cards dark
+          900: '#0b1712', // Selva Noche — sidebar, hero
+          950: '#060e0a', // Footer
         },
-        income:  '#22c55e',
-        expense: '#f43f5e',
+        income:  '#00b894', // = Agua Caribe
+        expense: '#e53e3e', // Mora
       },
       borderRadius: { xl: '1rem', '2xl': '1.5rem', '3xl': '2rem' },
       boxShadow: {

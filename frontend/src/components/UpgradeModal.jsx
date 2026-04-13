@@ -10,7 +10,7 @@ const FEATURE_COPY = {
   ocr: {
     icon: '📄',
     title: 'Escaneo de recibos con IA',
-    description: 'Fotografiá tu ticket y FinTrack extrae automáticamente el monto, la fecha y el comercio. Solo disponible en el plan Pro.',
+    description: 'Fotografiá tu ticket y MoniFlow extrae automáticamente el monto, la fecha y el comercio. Solo disponible en el plan Pro.',
     perks: [
       'OCR ilimitado con inteligencia artificial',
       'Transacciones ilimitadas',

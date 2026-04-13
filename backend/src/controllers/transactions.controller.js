@@ -1,5 +1,6 @@
 import pool     from '../config/db.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { getUserFamily } from '../utils/family.js';
 
 // ── Helpers de integridad ──────────────────────────────────────────────────
 
@@ -114,10 +115,21 @@ async function reverseEffects(conn, txnId, { debt_id, savings_goal_id }) {
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 export async function list(req, res) {
+  const uid = req.userId;
   const { type, category_id, account_id, from, to, page = 1, limit = 50 } = req.query;
   const offset = (page - 1) * limit;
-  const params = [req.userId];
-  let where = 'WHERE t.user_id = ?';
+
+  const fam = await getUserFamily(uid);
+  const fid = fam?.family_id ?? null;
+
+  let where, params;
+  if (fid) {
+    where  = 'WHERE (t.user_id = ? OR t.family_id = ?)';
+    params = [uid, fid];
+  } else {
+    where  = 'WHERE t.user_id = ?';
+    params = [uid];
+  }
 
   if (type)        { where += ' AND t.type = ?';        params.push(type); }
   if (category_id) { where += ' AND t.category_id = ?'; params.push(category_id); }
@@ -146,25 +158,33 @@ export async function list(req, res) {
 }
 
 export async function create(req, res) {
+  const uid = req.userId;
   const { category_id, type, amount, description, txn_date,
-          debt_id, savings_goal_id, credit_card_id, account_id, extra_principal = 0 } = req.body;
+          debt_id, savings_goal_id, credit_card_id, account_id,
+          extra_principal = 0, shared = false } = req.body;
 
   const conn = await pool.getConnection();
   try {
+    let familyId = null;
+    if (shared) {
+      const fam = await getUserFamily(uid);
+      if (fam) familyId = fam.family_id;
+    }
+
     await conn.beginTransaction();
 
     const [result] = await conn.query(
       `INSERT INTO transactions
-         (user_id, category_id, type, amount, description, txn_date,
+         (user_id, family_id, category_id, type, amount, description, txn_date,
           debt_id, savings_goal_id, credit_card_id, account_id, extra_principal)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [req.userId, category_id, type, amount, description, txn_date,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [uid, familyId, category_id, type, amount, description, txn_date,
        debt_id || null, savings_goal_id || null, credit_card_id || null,
        account_id || null, Number(extra_principal) || 0]
     );
     const txnId = result.insertId;
 
-    await applyEffects(conn, txnId, req.userId, {
+    await applyEffects(conn, txnId, uid, {
       debt_id:         debt_id         || null,
       savings_goal_id: savings_goal_id || null,
       amount:          Number(amount),
@@ -192,16 +212,24 @@ export async function create(req, res) {
 
 export async function update(req, res) {
   const { id } = req.params;
+  const uid = req.userId;
   const { category_id, type, amount, description, txn_date,
           debt_id, savings_goal_id, credit_card_id, account_id, extra_principal } = req.body;
+
+  const fam = await getUserFamily(uid);
+  const fid = fam?.family_id ?? null;
 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
-    // Leer estado anterior completo
+    const accessClause = fid
+      ? 'WHERE id = ? AND (user_id = ? OR family_id = ?)'
+      : 'WHERE id = ? AND user_id = ?';
+    const accessParams = fid ? [id, uid, fid] : [id, uid];
+
     const [[old]] = await conn.query(
-      'SELECT * FROM transactions WHERE id = ? AND user_id = ?', [id, req.userId]
+      `SELECT * FROM transactions ${accessClause}`, accessParams
     );
     if (!old) {
       await conn.rollback();
@@ -226,7 +254,7 @@ export async function update(req, res) {
     );
 
     // 3. Aplicar efectos del nuevo estado
-    await applyEffects(conn, Number(id), req.userId, {
+    await applyEffects(conn, Number(id), uid, {
       debt_id:         debt_id         || null,
       savings_goal_id: savings_goal_id || null,
       amount:          Number(amount),
@@ -254,12 +282,22 @@ export async function update(req, res) {
 
 export async function remove(req, res) {
   const { id } = req.params;
+  const uid = req.userId;
+
+  const fam = await getUserFamily(uid);
+  const fid = fam?.family_id ?? null;
+
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
+    const accessClause = fid
+      ? 'WHERE id = ? AND (user_id = ? OR family_id = ?)'
+      : 'WHERE id = ? AND user_id = ?';
+    const accessParams = fid ? [id, uid, fid] : [id, uid];
+
     const [[txn]] = await conn.query(
-      'SELECT * FROM transactions WHERE id = ? AND user_id = ?', [id, req.userId]
+      `SELECT * FROM transactions ${accessClause}`, accessParams
     );
     if (!txn) {
       await conn.rollback();
@@ -286,24 +324,27 @@ export async function remove(req, res) {
 }
 
 export async function summary(req, res) {
+  const uid = req.userId;
   const { year = new Date().getFullYear() } = req.query;
   try {
+    const fam = await getUserFamily(uid);
+    const fid = fam?.family_id ?? null;
+    const ownerClause = fid ? '(t.user_id = ? OR t.family_id = ?)' : 't.user_id = ?';
+    const ownerParams = fid ? [uid, fid] : [uid];
+
     const [monthly] = await pool.query(
-      `SELECT DATE_FORMAT(txn_date,'%Y-%m') AS month,
-              type,
-              SUM(amount) AS total
-       FROM transactions
-       WHERE user_id = ? AND YEAR(txn_date) = ?
-       GROUP BY month, type
-       ORDER BY month`,
-      [req.userId, year]
+      `SELECT DATE_FORMAT(t.txn_date,'%Y-%m') AS month, t.type, SUM(t.amount) AS total
+       FROM transactions t
+       WHERE ${ownerClause} AND YEAR(t.txn_date) = ?
+       GROUP BY month, t.type ORDER BY month`,
+      [...ownerParams, year]
     );
     const [byCategory] = await pool.query(
       `SELECT c.name, c.color, c.icon, t.type, SUM(t.amount) AS total
        FROM transactions t JOIN categories c ON c.id = t.category_id
-       WHERE t.user_id = ? AND YEAR(t.txn_date) = ?
+       WHERE ${ownerClause} AND YEAR(t.txn_date) = ?
        GROUP BY c.id, t.type`,
-      [req.userId, year]
+      [...ownerParams, year]
     );
     res.json({ monthly, byCategory });
   } catch (err) {
@@ -312,9 +353,18 @@ export async function summary(req, res) {
 }
 
 export async function exportCsv(req, res) {
+  const uid = req.userId;
   const { from, to } = req.query;
-  const params = [req.userId];
-  let where = 'WHERE t.user_id = ?';
+  const fam = await getUserFamily(uid);
+  const fid = fam?.family_id ?? null;
+  let where, params;
+  if (fid) {
+    where  = 'WHERE (t.user_id = ? OR t.family_id = ?)';
+    params = [uid, fid];
+  } else {
+    where  = 'WHERE t.user_id = ?';
+    params = [uid];
+  }
   if (from) { where += ' AND t.txn_date >= ?'; params.push(from); }
   if (to)   { where += ' AND t.txn_date <= ?'; params.push(to); }
 

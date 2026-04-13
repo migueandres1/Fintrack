@@ -414,6 +414,69 @@ export const useStore = create(
       removePlannedIncome: async (id) => {
         await api.delete(`/budgets/income/${id}`);
       },
+
+      // ── Family ────────────────────────────────────────
+      family:        null,
+      familyLoading: false,
+
+      fetchFamily: async () => {
+        set({ familyLoading: true });
+        try {
+          const { data } = await api.get('/family');
+          set({ family: data });
+          return data;
+        } catch (err) {
+          // 403 = no familia plan — silencioso
+          if (err.response?.status !== 403) console.error(err);
+          set({ family: null });
+        } finally {
+          set({ familyLoading: false });
+        }
+      },
+
+      createFamily: async (name) => {
+        const { data } = await api.post('/family', { name });
+        set({ family: data });
+        return data;
+      },
+
+      updateFamilyName: async (name) => {
+        await api.put('/family', { name });
+        set((s) => ({ family: s.family ? { ...s.family, name } : s.family }));
+      },
+
+      deleteFamily: async () => {
+        await api.delete('/family');
+        set({ family: null });
+      },
+
+      inviteMember: async (email) => {
+        const { data } = await api.post('/family/invite', { email });
+        return data;
+      },
+
+      joinFamily: async (token) => {
+        const { data } = await api.post('/family/join', { token });
+        return data;
+      },
+
+      removeFamilyMember: async (userId) => {
+        await api.delete(`/family/members/${userId}`);
+        set((s) => ({
+          family: s.family
+            ? { ...s.family, members: s.family.members.filter(m => m.id !== userId) }
+            : s.family,
+        }));
+      },
+
+      cancelFamilyInvitation: async (id) => {
+        await api.delete(`/family/invitations/${id}`);
+        set((s) => ({
+          family: s.family
+            ? { ...s.family, invitations: s.family.invitations.filter(i => i.id !== id) }
+            : s.family,
+        }));
+      },
     }),
     {
       name:    'fintrack-store',

@@ -9,6 +9,7 @@ import {
 import { useStore } from '../store/index.js';
 import api from '../services/api.js';
 import { openExternalUrl } from '../utils/openUrl.js';
+import { getInviteToken, clearInviteToken } from './JoinInvite.jsx';
 
 const CURRENCIES = ['USD','EUR','MXN','COP','ARS','BRL','GTQ','HNL','NIO','CRC','PEN','CLP'];
 const FREQUENCIES = [
@@ -81,7 +82,7 @@ function StepWelcome({ onNext }) {
         <TrendingUp size={32} className="text-white" />
       </div>
       <div>
-        <h1 className="text-display font-bold text-2xl">Bienvenido a FinTrack</h1>
+        <h1 className="text-display font-bold text-2xl">Bienvenido a MoniFlow</h1>
         <p className="text-[var(--text-muted)] mt-1 text-sm">
           Tu asistente de finanzas personales — configuremos tu cuenta en 6 pasos rápidos.
         </p>
@@ -194,7 +195,7 @@ function StepAccounts({ onNext, onPrev }) {
       <div>
         <h2 className="text-display font-bold text-lg">Cuentas bancarias</h2>
         <p className="text-[var(--text-muted)] text-sm mt-1">
-          Registra las cuentas donde tienes dinero hoy. FinTrack calculará tu balance
+          Registra las cuentas donde tienes dinero hoy. MoniFlow calculará tu balance
           automáticamente conforme registres transacciones.
         </p>
       </div>
@@ -320,7 +321,7 @@ function StepIncome({ onNext, onPrev }) {
       <div>
         <h2 className="text-display font-bold text-lg">Ingresos recurrentes</h2>
         <p className="text-[var(--text-muted)] text-sm mt-1">
-          Registra los ingresos que recibes de forma periódica. FinTrack los usará para calcular
+          Registra los ingresos que recibes de forma periódica. MoniFlow los usará para calcular
           tu score financiero y proyectar tu balance futuro.
         </p>
       </div>
@@ -431,7 +432,7 @@ function StepDebts({ onNext, onPrev }) {
       <div>
         <h2 className="text-display font-bold text-lg">Tus deudas</h2>
         <p className="text-[var(--text-muted)] text-sm mt-1">
-          Registra préstamos, créditos o cualquier deuda activa. FinTrack calculará cuándo
+          Registra préstamos, créditos o cualquier deuda activa. MoniFlow calculará cuándo
           terminarás de pagarla y cuánto pagas en intereses.
         </p>
       </div>
@@ -514,7 +515,7 @@ function StepDebts({ onNext, onPrev }) {
               onChange={(e) => setForm({ ...form, start_date: e.target.value })}
               required
             />
-            <Hint>Desde cuándo quieres que FinTrack rastree esta deuda (normalmente hoy).</Hint>
+            <Hint>Desde cuándo quieres que MoniFlow rastree esta deuda (normalmente hoy).</Hint>
           </div>
         </div>
         <button type="submit" disabled={busy} className="btn-primary justify-center py-2">
@@ -567,7 +568,7 @@ function StepSavings({ onNext, onPrev }) {
       <div>
         <h2 className="text-display font-bold text-lg">Metas de ahorro</h2>
         <p className="text-[var(--text-muted)] text-sm mt-1">
-          Define hacia dónde quieres llegar con tus ahorros. FinTrack te mostrará cuánto
+          Define hacia dónde quieres llegar con tus ahorros. MoniFlow te mostrará cuánto
           ahorrar por semana, quincena o mes para alcanzar cada meta.
         </p>
       </div>
@@ -607,7 +608,7 @@ function StepSavings({ onNext, onPrev }) {
               value={form.deadline}
               onChange={(e) => setForm({ ...form, deadline: e.target.value })}
             />
-            <Hint>Si tienes una fecha en mente, FinTrack calculará cuánto ahorrar por período.</Hint>
+            <Hint>Si tienes una fecha en mente, MoniFlow calculará cuánto ahorrar por período.</Hint>
           </div>
         </div>
         <button type="submit" disabled={busy} className="btn-primary justify-center py-2">
@@ -938,22 +939,49 @@ export default function Onboarding() {
   const user               = useStore((s) => s.user);
   const completeOnboarding = useStore((s) => s.completeOnboarding);
   const startCheckout      = useStore((s) => s.startCheckout);
+  const joinFamily         = useStore((s) => s.joinFamily);
   const navigate           = useNavigate();
   const [step, setStep]    = useState(0);
   const [busy, setBusy]    = useState(false);
 
+  // Detect family invite token saved by JoinInvite.jsx before registration
+  const inviteToken = getInviteToken();
+  const hasFamilyInvite = Boolean(inviteToken);
+
   const next = () => setStep((s) => s + 1);
   const prev = () => setStep((s) => Math.max(0, s - 1));
 
-  const finish = async () => {
+  // After onboarding data steps, jump straight to Done (skip plan step)
+  // if the user is joining via a family invite
+  const goNext = () => {
+    setStep((s) => {
+      const nextStep = s + 1;
+      // Step 7 = Plan — skip it for family invitees
+      if (nextStep === 7 && hasFamilyInvite) return 8;
+      return nextStep;
+    });
+  };
+
+  // Auto-join family after completing onboarding (for invite flow)
+  async function joinAndFinish() {
     setBusy(true);
     try {
       await completeOnboarding();
+      if (hasFamilyInvite) {
+        try {
+          await joinFamily(inviteToken);
+        } catch {
+          // Token may have expired — user can join manually later
+        }
+        clearInviteToken();
+      }
       navigate('/');
     } finally {
       setBusy(false);
     }
-  };
+  }
+
+  const finish = joinAndFinish;
 
   // User chose a paid plan: complete onboarding then redirect to Stripe
   const handlePaidSelect = async (priceKey) => {
@@ -1003,12 +1031,12 @@ export default function Onboarding() {
 
         <div className="card">
           {step === 0 && <StepWelcome onNext={next} />}
-          {step === 1 && <StepProfile   user={user} onNext={next} onPrev={prev} />}
-          {step === 2 && <StepAccounts  onNext={next} onPrev={prev} />}
-          {step === 3 && <StepIncome    onNext={next} onPrev={prev} />}
-          {step === 4 && <StepDebts     onNext={next} onPrev={prev} />}
-          {step === 5 && <StepSavings   onNext={next} onPrev={prev} />}
-          {step === 6 && <StepCards     onNext={next} onPrev={prev} />}
+          {step === 1 && <StepProfile   user={user} onNext={goNext} onPrev={prev} />}
+          {step === 2 && <StepAccounts  onNext={goNext} onPrev={prev} />}
+          {step === 3 && <StepIncome    onNext={goNext} onPrev={prev} />}
+          {step === 4 && <StepDebts     onNext={goNext} onPrev={prev} />}
+          {step === 5 && <StepSavings   onNext={goNext} onPrev={prev} />}
+          {step === 6 && <StepCards     onNext={goNext} onPrev={prev} />}
           {step === 7 && <StepPlan      onSkip={handleSkipPlan} onPaidSelect={handlePaidSelect} busy={busy} />}
           {step === 8 && <StepDone      onFinish={finish} busy={busy} />}
         </div>

@@ -23,12 +23,12 @@ export default function AdminLayout() {
       <aside className="w-56 flex-shrink-0 flex flex-col border-r border-white/8 bg-[#0d0d14]">
         {/* Logo */}
         <div className="h-16 flex items-center gap-2.5 px-5 border-b border-white/8">
-          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <TrendingUp size={14} className="text-white" />
+          <div className="w-7 h-7 rounded-lg bg-[#00b894] flex items-center justify-center">
+            <TrendingUp size={14} className="text-[#001e18]" />
           </div>
           <div>
-            <span className="font-bold text-sm tracking-tight">FinTrack</span>
-            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+            <span className="font-bold text-sm tracking-tight">MoniFlow</span>
+            <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#00b894]/15 text-[#55d8b4] border border-[#00b894]/25">
               Admin
             </span>
           </div>
@@ -44,7 +44,7 @@ export default function AdminLayout() {
               className={({ isActive }) =>
                 `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+                    ? 'bg-[#00b894]/15 text-[#55d8b4] border border-[#00b894]/25'
                     : 'text-white/50 hover:text-white/80 hover:bg-white/5'
                 }`
               }
@@ -58,7 +58,7 @@ export default function AdminLayout() {
         {/* User + logout */}
         <div className="p-3 border-t border-white/8">
           <div className="flex items-center gap-2.5 px-2 py-1.5 mb-1">
-            <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">
+            <div className="w-7 h-7 rounded-full bg-[#00b894]/20 flex items-center justify-center text-xs font-bold text-[#00b894]">
               {user?.name?.[0]?.toUpperCase() || 'A'}
             </div>
             <div className="min-w-0">

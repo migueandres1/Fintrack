@@ -22,6 +22,8 @@ import Categories     from './pages/Categories.jsx';
 import DocsPage       from './pages/DocsPage.jsx';
 import Pricing        from './pages/Pricing.jsx';
 import BillingSuccess from './pages/BillingSuccess.jsx';
+import Family         from './pages/Family.jsx';
+import JoinInvite     from './pages/JoinInvite.jsx';
 import AdminDashboard from './pages/admin/AdminDashboard.jsx';
 
 function RequireAuth({ children }) {
@@ -83,6 +85,7 @@ export default function App() {
     <Routes>
       <Route path="/login"    element={<RedirectIfAuth><Login /></RedirectIfAuth>} />
       <Route path="/register" element={<RedirectIfAuth><Register /></RedirectIfAuth>} />
+      <Route path="/join"     element={<JoinInvite />} />
 
       {/* Admin */}
       <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
@@ -105,6 +108,7 @@ export default function App() {
         <Route path="guide"           element={<DocsPage src="/docs/functional/"  title="Guía de usuario" />} />
         <Route path="pricing"         element={<Pricing />} />
         <Route path="billing/success" element={<BillingSuccess />} />
+        <Route path="family"          element={<Family />} />
       </Route>
 
       <Route path="/onboarding" element={<RequireOnboarding><Onboarding /></RequireOnboarding>} />

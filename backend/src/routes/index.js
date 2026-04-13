@@ -1,7 +1,7 @@
 import { Router }        from 'express';
 import multer            from 'multer';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
-import { requireFeature, requireLimit } from '../middleware/planGuard.js';
+import { requireFeature, requireLimit, requireFamiliaPlan } from '../middleware/planGuard.js';
 import pool              from '../config/db.js';
 import * as auth         from '../controllers/auth.controller.js';
 import * as txn          from '../controllers/transactions.controller.js';
@@ -16,6 +16,7 @@ import * as ocr          from '../controllers/ocr.controller.js';
 import * as cats         from '../controllers/categories.controller.js';
 import * as billing      from '../controllers/billing.controller.js';
 import * as admin        from '../controllers/admin.controller.js';
+import * as family       from '../controllers/family.controller.js';
 
 // Multer: memoria, solo imágenes y PDF, máx 10 MB
 const upload = multer({
@@ -129,6 +130,16 @@ r.get   ('/budgets/suggestions',              authenticate, budgets.getSuggestio
 r.get   ('/budgets/:categoryId/transactions', authenticate, budgets.categoryDetail);
 r.get   ('/budgets/:categoryId/history',      authenticate, budgets.categoryHistory);
 r.delete('/budgets/:id',                      authenticate, budgets.remove);
+
+// ── Family ─────────────────────────────────────────────────────────────────
+r.get   ('/family',                     authenticate, requireFamiliaPlan(), family.getFamily);
+r.post  ('/family',                     authenticate, requireFamiliaPlan(), family.createFamily);
+r.put   ('/family',                     authenticate, requireFamiliaPlan(), family.updateFamily);
+r.delete('/family',                     authenticate, requireFamiliaPlan(), family.deleteFamily);
+r.post  ('/family/invite',              authenticate, requireFamiliaPlan(), family.invite);
+r.post  ('/family/join',                authenticate,                       family.join);
+r.delete('/family/members/:userId',     authenticate, requireFamiliaPlan(), family.removeMember);
+r.delete('/family/invitations/:id',     authenticate, requireFamiliaPlan(), family.cancelInvitation);
 
 // ── Admin ───────────────────────────────────────────────────────────────────
 r.get('/admin/stats', authenticate, requireAdmin, admin.getStats);

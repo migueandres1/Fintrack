@@ -80,6 +80,8 @@ CREATE TABLE debts (
 CREATE TABLE savings_goals (
   id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id         INT UNSIGNED  NOT NULL,
+  family_id       INT UNSIGNED  NULL,
+  account_id      INT UNSIGNED  NULL,
   name            VARCHAR(120)  NOT NULL,
   target_amount   DECIMAL(14,2) NOT NULL CHECK (target_amount > 0),
   current_amount  DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -89,8 +91,12 @@ CREATE TABLE savings_goals (
   is_completed    TINYINT(1)    NOT NULL DEFAULT 0,
   created_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  INDEX idx_goal_user (user_id)
+  FOREIGN KEY (user_id)   REFERENCES users(id)         ON DELETE CASCADE,
+  FOREIGN KEY (family_id) REFERENCES families(id)      ON DELETE SET NULL,
+  FOREIGN KEY (account_id) REFERENCES bank_accounts(id) ON DELETE SET NULL,
+  INDEX idx_goal_user   (user_id),
+  INDEX idx_goal_family (family_id),
+  INDEX idx_goal_account (account_id)
 );
 
 -- ------------------------------------------------------------

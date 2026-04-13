@@ -1,11 +1,11 @@
 {
-  "name": "FinTrack – Finanzas Personales",
-  "short_name": "FinTrack",
-  "description": "Controla tus finanzas personales: ingresos, gastos, deudas y metas de ahorro",
+  "name": "MoniFlow — Tu dinero, bajo control.",
+  "short_name": "MoniFlow",
+  "description": "La app de finanzas personales para Centroamérica y el Caribe. Gastos, tarjetas, deudas y metas de ahorro.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#080f1a",
-  "theme_color": "#0ea5e9",
+  "background_color": "#0b1712",
+  "theme_color": "#00b894",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },

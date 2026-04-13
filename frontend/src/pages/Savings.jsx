@@ -14,7 +14,7 @@ const EMPTY_GOAL = {
   name: '', target_amount: '', deadline: '', icon: 'piggy-bank', color: '#6366f1', account_id: '',
 };
 const EMPTY_CONTRIB = {
-  amount: '', contrib_date: localDate(), notes: '',
+  amount: '', contrib_date: localDate(), notes: '', account_id: '',
 };
 
 function GoalCard({ goal, currency, onEdit, onDelete, onContrib, onEditContrib, onDeleteContrib, accounts = [] }) {
@@ -217,7 +217,11 @@ export default function Savings() {
     setForm({ name: g.name, target_amount: g.target_amount, deadline: g.deadline || '', icon: g.icon, color: g.color, account_id: g.account_id || '' });
     setModal(true);
   };
-  const openContrib = (g) => { setContribGoal(g); setContribForm(EMPTY_CONTRIB); setContribModal(true); };
+  const openContrib = (g) => {
+    setContribGoal(g);
+    setContribForm({ ...EMPTY_CONTRIB, account_id: g.account_id ? String(g.account_id) : '' });
+    setContribModal(true);
+  };
 
   const openEditContrib = (contrib, goalId, refresh) => {
     setEditContribData({ contrib, goalId, refresh });
@@ -428,6 +432,24 @@ export default function Savings() {
               <input className="input" type="date" value={contribForm.contrib_date}
                 onChange={e => setContribForm({ ...contribForm, contrib_date: e.target.value })} required />
             </div>
+          </div>
+          <div>
+            <label className="label">Descontar de cuenta bancaria</label>
+            <select
+              className="input"
+              value={contribForm.account_id}
+              onChange={e => setContribForm({ ...contribForm, account_id: e.target.value })}
+            >
+              <option value="">— Sin descontar de cuenta —</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            {contribForm.account_id && (
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                Se registrará un egreso en esta cuenta por el monto del aporte.
+              </p>
+            )}
           </div>
           <div>
             <label className="label">Notas (opcional)</label>

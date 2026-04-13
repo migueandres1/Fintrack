@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import { getUserFamily, ownershipClause, resourceAccessClause } from '../utils/family.js';
 
 const TYPE_LABEL = {
   checking:   'Cuenta corriente',
@@ -10,14 +11,18 @@ const TYPE_LABEL = {
 export async function list(req, res) {
   const uid = req.userId;
   try {
+    const fam = await getUserFamily(uid);
+    const fid = fam?.family_id ?? null;
+    const { clause, params } = ownershipClause(uid, fid);
+
     const [accounts] = await pool.query(
-      'SELECT * FROM bank_accounts WHERE user_id = ? ORDER BY created_at ASC',
-      [uid]
+      `SELECT *, ${fid ? 'family_id IS NOT NULL' : 'FALSE'} AS is_shared
+       FROM bank_accounts WHERE ${clause} ORDER BY created_at ASC`,
+      params
     );
 
     if (!accounts.length) return res.json([]);
 
-    // Balance = initial_balance + ingresos - gastos de transacciones vinculadas
     const ids = accounts.map(a => a.id);
     const [txnTotals] = await pool.query(
       `SELECT account_id,
@@ -43,6 +48,7 @@ export async function list(req, res) {
       return {
         ...a,
         balance,
+        is_shared: Boolean(a.is_shared),
         type_label: TYPE_LABEL[a.type] || a.type,
       };
     }));
@@ -54,12 +60,20 @@ export async function list(req, res) {
 
 export async function create(req, res) {
   const uid = req.userId;
-  const { name, type = 'checking', initial_balance = 0, currency = 'USD', color = '#6366f1', notes } = req.body;
+  const { name, type = 'checking', currency = 'USD', color = '#6366f1', notes, shared = false } = req.body;
+  const initial_balance = Number(req.body.initial_balance) || 0;
   try {
+    let familyId = null;
+    if (shared) {
+      const fam = await getUserFamily(uid);
+      if (!fam) return res.status(400).json({ error: 'No perteneces a un grupo familiar' });
+      familyId = fam.family_id;
+    }
+
     const [result] = await pool.query(
-      `INSERT INTO bank_accounts (user_id, name, type, initial_balance, currency, color, notes)
-       VALUES (?,?,?,?,?,?,?)`,
-      [uid, name, type, initial_balance, currency, color, notes || null]
+      `INSERT INTO bank_accounts (user_id, family_id, name, type, initial_balance, currency, color, notes)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [uid, familyId, name, type, initial_balance, currency, color, notes || null]
     );
     const [[account]] = await pool.query(
       'SELECT * FROM bank_accounts WHERE id = ?', [result.insertId]
@@ -67,6 +81,7 @@ export async function create(req, res) {
     res.status(201).json({
       ...account,
       balance: Number(account.initial_balance),
+      is_shared: Boolean(account.family_id),
       type_label: TYPE_LABEL[account.type] || account.type,
     });
   } catch (err) {
@@ -80,9 +95,11 @@ export async function update(req, res) {
   const uid = req.userId;
   const { name, type, initial_balance, currency, color, notes, is_active } = req.body;
   try {
-    const [[check]] = await pool.query(
-      'SELECT id FROM bank_accounts WHERE id = ? AND user_id = ?', [id, uid]
-    );
+    const fam = await getUserFamily(uid);
+    const fid = fam?.family_id ?? null;
+    const { clause, params } = resourceAccessClause(id, uid, fid);
+
+    const [[check]] = await pool.query(`SELECT id FROM bank_accounts WHERE ${clause}`, params);
     if (!check) return res.status(404).json({ error: 'No encontrado' });
 
     await pool.query(
@@ -100,9 +117,11 @@ export async function remove(req, res) {
   const { id } = req.params;
   const uid = req.userId;
   try {
-    const [[check]] = await pool.query(
-      'SELECT id FROM bank_accounts WHERE id = ? AND user_id = ?', [id, uid]
-    );
+    const fam = await getUserFamily(uid);
+    const fid = fam?.family_id ?? null;
+    const { clause, params } = resourceAccessClause(id, uid, fid);
+
+    const [[check]] = await pool.query(`SELECT id FROM bank_accounts WHERE ${clause}`, params);
     if (!check) return res.status(404).json({ error: 'No encontrado' });
     await pool.query('DELETE FROM bank_accounts WHERE id = ?', [id]);
     res.json({ success: true });
@@ -117,9 +136,11 @@ export async function getTransactions(req, res) {
   const { page = 1, limit = 50 } = req.query;
   const offset = (page - 1) * limit;
   try {
-    const [[check]] = await pool.query(
-      'SELECT id FROM bank_accounts WHERE id = ? AND user_id = ?', [id, uid]
-    );
+    const fam = await getUserFamily(uid);
+    const fid = fam?.family_id ?? null;
+    const { clause, params } = resourceAccessClause(id, uid, fid);
+
+    const [[check]] = await pool.query(`SELECT id FROM bank_accounts WHERE ${clause}`, params);
     if (!check) return res.status(404).json({ error: 'No encontrado' });
 
     const [[{ total }]] = await pool.query(

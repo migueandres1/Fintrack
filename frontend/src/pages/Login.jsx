@@ -11,12 +11,15 @@ export default function Login() {
   const login = useStore((s) => s.login);
   const navigate = useNavigate();
 
+  // Support ?redirect= for post-login navigation (e.g. invite links)
+  const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true); setErr('');
     try {
       const data = await login(form.email, form.password);
-      navigate(data.user.is_admin ? '/admin' : '/');
+      navigate(data.user.is_admin ? '/admin' : redirectTo);
     } catch (error) {
       setErr(error.response?.data?.error || 'Error al iniciar sesión');
     } finally {
@@ -32,8 +35,8 @@ export default function Login() {
           <div className="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center mb-3">
             <TrendingUp size={24} className="text-white" />
           </div>
-          <h1 className="text-display font-bold text-2xl">FinTrack</h1>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Controla tus finanzas</p>
+          <h1 className="text-display font-semibold text-2xl">MoniFlow</h1>
+          <p className="text-[var(--text-muted)] text-sm mt-1">Tu dinero, bajo control.</p>
         </div>
 
         <div className="card">
