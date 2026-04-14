@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.tuempresa.fintrack',
-  appName: 'FinTrack',
+  appId: 'live.moniflow.app',
+  appName: 'MoniFlow',
   webDir: 'dist',
   plugins: {
     Camera: {

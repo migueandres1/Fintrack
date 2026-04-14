@@ -125,7 +125,8 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:5173',
     'capacitor://localhost',   // iOS WebView (Capacitor)
-    'http://localhost',         // Android WebView (Capacitor)
+    'https://localhost',        // Android WebView (Capacitor 5+)
+    'http://localhost',         // Android WebView legacy
   ],
   credentials: true,
 }));
