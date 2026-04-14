@@ -50,8 +50,10 @@ async function recomputeGoalAmount(conn, goalId) {
  * Aplica los efectos secundarios de una transacción:
  * - Si tiene debt_id: crea registro en debt_payments y recalcula saldo de la deuda.
  * - Si tiene savings_goal_id: crea aporte y recalcula monto de la meta.
+ *   Si la meta tiene una cuenta destino distinta a la cuenta origen de la transacción,
+ *   crea también una transacción de ingreso para que la cuenta destino refleje el saldo.
  */
-async function applyEffects(conn, txnId, userId, { debt_id, savings_goal_id, amount, extra_principal, txn_date, description }) {
+async function applyEffects(conn, txnId, userId, { debt_id, savings_goal_id, amount, extra_principal, txn_date, description, account_id }) {
   if (debt_id) {
     const [[debt]] = await conn.query(
       'SELECT * FROM debts WHERE id = ? AND user_id = ?', [debt_id, userId]
@@ -82,15 +84,49 @@ async function applyEffects(conn, txnId, userId, { debt_id, savings_goal_id, amo
 
   if (savings_goal_id) {
     const [[goal]] = await conn.query(
-      'SELECT id FROM savings_goals WHERE id = ? AND user_id = ?', [savings_goal_id, userId]
+      'SELECT id, account_id, name, family_id FROM savings_goals WHERE id = ?', [savings_goal_id]
     );
     if (goal) {
-      await conn.query(
+      const [contribResult] = await conn.query(
         `INSERT INTO savings_contributions
            (goal_id, transaction_id, amount, contrib_date, notes)
          VALUES (?,?,?,?,?)`,
         [savings_goal_id, txnId, amount, txn_date, description || null]
       );
+      const contribId = contribResult.insertId;
+
+      // Si la meta tiene cuenta destino diferente a la cuenta de la transacción,
+      // crear transacción de ingreso para reflejar el dinero en la cuenta de ahorro.
+      const destAccountId   = goal.account_id ? Number(goal.account_id) : null;
+      const sourceAccountId = account_id      ? Number(account_id)      : null;
+      if (destAccountId && destAccountId !== sourceAccountId) {
+        const [[incomeCat]] = await conn.query(
+          `SELECT id FROM categories
+           WHERE (user_id IS NULL OR user_id = ?) AND type = 'income'
+             AND name IN ('Transferencia','Ahorros','Ingresos','Savings')
+           ORDER BY user_id DESC LIMIT 1`,
+          [userId]
+        );
+        const [[fallbackIncCat]] = await conn.query(
+          `SELECT id FROM categories WHERE (user_id IS NULL OR user_id = ?) AND type = 'income' LIMIT 1`,
+          [userId]
+        );
+        const incCatId = incomeCat?.id || fallbackIncCat?.id;
+        if (incCatId) {
+          const [transferResult] = await conn.query(
+            `INSERT INTO transactions
+               (user_id, family_id, category_id, type, amount, description, txn_date, account_id)
+             VALUES (?,?,?,?,?,?,?,?)`,
+            [userId, goal.family_id || null, incCatId, 'income', amount,
+             description || `Aporte: ${goal.name}`, txn_date, destAccountId]
+          );
+          await conn.query(
+            'UPDATE savings_contributions SET transfer_txn_id = ? WHERE id = ?',
+            [transferResult.insertId, contribId]
+          );
+        }
+      }
+
       await recomputeGoalAmount(conn, savings_goal_id);
     }
   }
@@ -100,6 +136,7 @@ async function applyEffects(conn, txnId, userId, { debt_id, savings_goal_id, amo
  * Revierte los efectos secundarios de una transacción:
  * - Elimina su registro en debt_payments (por transaction_id) y recalcula saldo.
  * - Elimina su aporte en savings_contributions (por transaction_id) y recalcula monto.
+ *   También elimina la transacción de ingreso pareada (transfer_txn_id) si existe.
  */
 async function reverseEffects(conn, txnId, { debt_id, savings_goal_id }) {
   if (debt_id) {
@@ -107,7 +144,15 @@ async function reverseEffects(conn, txnId, { debt_id, savings_goal_id }) {
     await recomputeDebtBalance(conn, debt_id);
   }
   if (savings_goal_id) {
+    // Recuperar transfer_txn_id antes de borrar la contribución
+    const [[contrib]] = await conn.query(
+      'SELECT transfer_txn_id FROM savings_contributions WHERE transaction_id = ?', [txnId]
+    );
     await conn.query('DELETE FROM savings_contributions WHERE transaction_id = ?', [txnId]);
+    // Borrar también la transacción de ingreso pareada (si existe)
+    if (contrib?.transfer_txn_id) {
+      await conn.query('DELETE FROM transactions WHERE id = ?', [contrib.transfer_txn_id]);
+    }
     await recomputeGoalAmount(conn, savings_goal_id);
   }
 }
@@ -191,6 +236,7 @@ export async function create(req, res) {
       extra_principal: Number(extra_principal) || 0,
       txn_date,
       description,
+      account_id:      account_id      || null,
     });
 
     await conn.commit();
@@ -261,6 +307,7 @@ export async function update(req, res) {
       extra_principal: Number(extra_principal) || 0,
       txn_date,
       description,
+      account_id:      account_id      || null,
     });
 
     await conn.commit();

@@ -9,3 +9,5 @@ cuando elimino un aporte desde la pantalla de metas de ahorro debe borrar tambie
 
 
 registro un aporte desde dos pantallas distintas, desde transacciones y desde aporte en metas de ahorro, ninguno de los dos aumenta el saldo de la cuenta vinculada, debe disminuir un saldo de la cuenta origen y sumar el otro, como te dije practiamente una transferencia entre cuentas
+
+cuando registro un pago a tarjeta tengo que poder ponerle una cuenta bancaria de la que salio, para disminuir el saldo bancario y saldar la tarjeta de credito

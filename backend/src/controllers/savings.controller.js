@@ -134,14 +134,16 @@ export async function addContribution(req, res) {
     const [[goal]] = await pool.query(`SELECT * FROM savings_goals WHERE ${clause}`, params);
     if (!goal) return res.status(404).json({ error: 'No encontrado' });
 
-    // Usar la cuenta vinculada a la meta si no se envió otra explícitamente
-    const targetAccountId = account_id || goal.account_id || null;
+    // Cuenta origen (de donde sale el dinero) y cuenta destino (donde se guarda en la meta)
+    const sourceAccountId = account_id ? Number(account_id) : null;
+    const destAccountId   = goal.account_id ? Number(goal.account_id) : null;
 
     const conn = await pool.getConnection();
     let contribId;
     try {
       await conn.beginTransaction();
 
+      // 1. Registrar la contribución
       const [result] = await conn.query(
         'INSERT INTO savings_contributions (goal_id, amount, contrib_date, notes) VALUES (?,?,?,?)',
         [id, amount, contrib_date, notes || null]
@@ -155,42 +157,70 @@ export async function addContribution(req, res) {
         [newAmount, isCompleted, id]
       );
 
-      // Si hay cuenta bancaria, crear transacción de egreso para descontar el saldo
-      if (targetAccountId) {
-        // Buscar categoría de ahorros (fallback a primera categoría de gasto del usuario)
-        const [[savingsCat]] = await conn.query(
-          `SELECT id FROM categories
-           WHERE (user_id IS NULL OR user_id = ?) AND type = 'expense'
-             AND name IN ('Ahorros','Ahorro','Transferencia','Savings')
-           ORDER BY user_id DESC LIMIT 1`,
-          [uid]
-        );
-        const [[fallbackCat]] = await conn.query(
-          `SELECT id FROM categories WHERE (user_id IS NULL OR user_id = ?) AND type = 'expense' LIMIT 1`,
-          [uid]
-        );
-        const catId = savingsCat?.id || fallbackCat?.id;
+      // 2. Buscar categorías para las transacciones
+      const [[expenseCat]] = await conn.query(
+        `SELECT id FROM categories
+         WHERE (user_id IS NULL OR user_id = ?) AND type = 'expense'
+           AND name IN ('Ahorros','Ahorro','Transferencia','Savings')
+         ORDER BY user_id DESC LIMIT 1`,
+        [uid]
+      );
+      const [[fallbackExpCat]] = await conn.query(
+        `SELECT id FROM categories WHERE (user_id IS NULL OR user_id = ?) AND type = 'expense' LIMIT 1`,
+        [uid]
+      );
+      const expCatId = expenseCat?.id || fallbackExpCat?.id;
 
-        if (catId) {
-          await conn.query(
-            `INSERT INTO transactions
-               (user_id, family_id, category_id, type, amount, description, txn_date, account_id, savings_goal_id)
-             VALUES (?,?,?,?,?,?,?,?,?)`,
-            [
-              uid, goal.family_id || null, catId, 'expense',
-              amount,
-              notes || `Aporte: ${goal.name}`,
-              contrib_date, targetAccountId, id,
-            ]
-          );
-        }
+      const [[incomeCat]] = await conn.query(
+        `SELECT id FROM categories
+         WHERE (user_id IS NULL OR user_id = ?) AND type = 'income'
+           AND name IN ('Transferencia','Ahorros','Ingresos','Savings')
+         ORDER BY user_id DESC LIMIT 1`,
+        [uid]
+      );
+      const [[fallbackIncCat]] = await conn.query(
+        `SELECT id FROM categories WHERE (user_id IS NULL OR user_id = ?) AND type = 'income' LIMIT 1`,
+        [uid]
+      );
+      const incCatId = incomeCat?.id || fallbackIncCat?.id;
+
+      const desc = notes || `Aporte: ${goal.name}`;
+
+      // 3. Egreso de la cuenta origen (disminuye su saldo)
+      if (sourceAccountId && expCatId) {
+        const [txnResult] = await conn.query(
+          `INSERT INTO transactions
+             (user_id, family_id, category_id, type, amount, description, txn_date, account_id, savings_goal_id)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
+          [uid, goal.family_id || null, expCatId, 'expense', amount, desc, contrib_date, sourceAccountId, id]
+        );
+        // Vincular transacción de egreso a la contribución
+        await conn.query(
+          'UPDATE savings_contributions SET transaction_id = ? WHERE id = ?',
+          [txnResult.insertId, contribId]
+        );
+      }
+
+      // 4. Ingreso a la cuenta destino de la meta (aumenta su saldo), solo si es distinta a la origen
+      if (destAccountId && destAccountId !== sourceAccountId && incCatId) {
+        const [transferResult] = await conn.query(
+          `INSERT INTO transactions
+             (user_id, family_id, category_id, type, amount, description, txn_date, account_id)
+           VALUES (?,?,?,?,?,?,?,?)`,
+          [uid, goal.family_id || null, incCatId, 'income', amount, desc, contrib_date, destAccountId]
+        );
+        // Vincular transacción de ingreso a la contribución
+        await conn.query(
+          'UPDATE savings_contributions SET transfer_txn_id = ? WHERE id = ?',
+          [transferResult.insertId, contribId]
+        );
       }
 
       await conn.commit();
       res.status(201).json({
         contribution_id: contribId,
-        new_amount: +(Number(goal.current_amount) + Number(amount)).toFixed(2),
-        is_completed: (+(Number(goal.current_amount) + Number(amount)).toFixed(2)) >= Number(goal.target_amount),
+        new_amount: newAmount,
+        is_completed: newAmount >= Number(goal.target_amount),
       });
     } catch (err) {
       await conn.rollback();
@@ -248,23 +278,57 @@ export async function updateContribution(req, res) {
 export async function deleteContribution(req, res) {
   const { contribId } = req.params;
   const uid = req.userId;
+  const conn = await pool.getConnection();
   try {
+    await conn.beginTransaction();
+
     const fam = await getUserFamily(uid);
     const fid = fam?.family_id ?? null;
 
-    const [[contrib]] = await pool.query(
+    const [[contrib]] = await conn.query(
       `SELECT sc.*, sg.user_id, sg.family_id FROM savings_contributions sc
        JOIN savings_goals sg ON sg.id = sc.goal_id
        WHERE sc.id = ?`, [contribId]
     );
     const owned = contrib && (contrib.user_id === uid || (fid && contrib.family_id === fid));
-    if (!owned) return res.status(404).json({ error: 'No encontrado' });
+    if (!owned) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'No encontrado' });
+    }
 
-    await pool.query('DELETE FROM savings_contributions WHERE id = ?', [contribId]);
-    const newAmount = await recalcGoal(contrib.goal_id);
-    res.json({ success: true, new_amount: newAmount });
+    const { transaction_id, transfer_txn_id, goal_id } = contrib;
+
+    // 1. Eliminar la contribución
+    await conn.query('DELETE FROM savings_contributions WHERE id = ?', [contribId]);
+
+    // 2. Recalcular el monto de la meta
+    const [[{ total }]] = await conn.query(
+      'SELECT COALESCE(SUM(amount), 0) AS total FROM savings_contributions WHERE goal_id = ?', [goal_id]
+    );
+    const [[goal]] = await conn.query('SELECT target_amount FROM savings_goals WHERE id = ?', [goal_id]);
+    const newTotal = +Number(total).toFixed(2);
+    await conn.query(
+      'UPDATE savings_goals SET current_amount = ?, is_completed = ? WHERE id = ?',
+      [newTotal, newTotal >= Number(goal.target_amount) ? 1 : 0, goal_id]
+    );
+
+    // 3. Eliminar la transacción de egreso vinculada (si existe)
+    if (transaction_id) {
+      await conn.query('DELETE FROM transactions WHERE id = ?', [transaction_id]);
+    }
+
+    // 4. Eliminar la transacción de ingreso (transferencia) vinculada (si existe)
+    if (transfer_txn_id) {
+      await conn.query('DELETE FROM transactions WHERE id = ?', [transfer_txn_id]);
+    }
+
+    await conn.commit();
+    res.json({ success: true, new_amount: newTotal });
   } catch (err) {
+    await conn.rollback();
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
+  } finally {
+    conn.release();
   }
 }

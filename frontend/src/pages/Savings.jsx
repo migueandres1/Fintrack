@@ -434,7 +434,7 @@ export default function Savings() {
             </div>
           </div>
           <div>
-            <label className="label">Descontar de cuenta bancaria</label>
+            <label className="label">Cuenta origen (de donde sale el dinero)</label>
             <select
               className="input"
               value={contribForm.account_id}
@@ -445,11 +445,24 @@ export default function Savings() {
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
-            {contribForm.account_id && (
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                Se registrará un egreso en esta cuenta por el monto del aporte.
-              </p>
-            )}
+            {contribForm.account_id && (() => {
+              const srcId = Number(contribForm.account_id);
+              const destId = contribGoal?.account_id ? Number(contribGoal.account_id) : null;
+              const srcName = accounts.find(a => a.id === srcId)?.name;
+              const destName = accounts.find(a => a.id === destId)?.name;
+              if (destId && destId !== srcId) {
+                return (
+                  <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                    Se descontará de <strong>{srcName}</strong> y se acreditará en <strong>{destName}</strong>.
+                  </p>
+                );
+              }
+              return (
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                  Se registrará un egreso en <strong>{srcName}</strong> por el monto del aporte.
+                </p>
+              );
+            })()}
           </div>
           <div>
             <label className="label">Notas (opcional)</label>
