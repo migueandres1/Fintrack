@@ -157,6 +157,11 @@ export const useStore = create(
         return data;
       },
 
+      createTransfer: async (payload) => {
+        const { data } = await api.post('/transfers', payload);
+        return data;
+      },
+
       importStatement: async (file) => {
         const form = new FormData();
         form.append('file', file);

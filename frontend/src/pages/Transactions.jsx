@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine, FileUp, Loader2 } from 'lucide-react';
+import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine, FileUp, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
@@ -18,6 +18,7 @@ const EMPTY_FORM = {
   txn_date: localDate(),
   debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '',
   extra_principal: '0', payment_method: 'cash',
+  transfer_from_account_id: '', transfer_to_account_id: '',
 };
 
 const EMPTY_REC = {
@@ -32,7 +33,7 @@ const FREQ_COLOR = { weekly: 'bg-purple-100 text-purple-700 dark:bg-purple-900/3
 export default function Transactions() {
   const {
     transactions, txnTotal, txnLoading, categories,
-    fetchTransactions, fetchCategories, createTransaction,
+    fetchTransactions, fetchCategories, createTransaction, createTransfer,
     updateTransaction, deleteTransaction,
     debts, fetchDebts,
     goals, fetchGoals,
@@ -156,21 +157,32 @@ export default function Transactions() {
     e.preventDefault();
     setBusy(true);
     try {
-      const payload = {
-        ...form,
-        debt_id: form.debt_id || null,
-        savings_goal_id: form.savings_goal_id || null,
-        credit_card_id: form.credit_card_id || null,
-        account_id: form.account_id || null,
-        extra_principal: Number(form.extra_principal) || 0,
-      };
-      if (editing) await updateTransaction(editing.id, payload);
-      else await createTransaction(payload);
+      if (form.type === 'transfer') {
+        await createTransfer({
+          from_account_id: form.transfer_from_account_id,
+          to_account_id:   form.transfer_to_account_id,
+          amount:          form.amount,
+          description:     form.description || null,
+          txn_date:        form.txn_date,
+        });
+      } else {
+        const payload = {
+          ...form,
+          debt_id: form.debt_id || null,
+          savings_goal_id: form.savings_goal_id || null,
+          credit_card_id: form.credit_card_id || null,
+          account_id: form.account_id || null,
+          extra_principal: Number(form.extra_principal) || 0,
+        };
+        if (editing) await updateTransaction(editing.id, payload);
+        else await createTransaction(payload);
+        fetchDebts();
+        fetchGoals();
+        if (payload.credit_card_id) fetchCreditCards();
+      }
       setModal(false);
       fetchTransactions(filters);
-      fetchDebts();
-      fetchGoals();
-      if (payload.credit_card_id) fetchCreditCards();
+      fetchAccounts();
       api.get('/transactions/summary').then(r => setSummary(r.data)).catch(() => { });
     } catch (err) {
       if (err.response?.status === 403 && err.response?.data?.code === 'LIMIT_REACHED') {
@@ -186,6 +198,7 @@ export default function Transactions() {
     await deleteTransaction(deleting.id);
     setDeleting(null);
     fetchTransactions(filters);
+    fetchAccounts();
   };
 
   const exportCsv = async () => {
@@ -389,39 +402,59 @@ export default function Transactions() {
               <span className="col-span-2">Descripción</span><span>Categoría</span><span>Fecha</span><span className="text-right">Monto</span>
             </div>
             <div className="divide-y divide-[var(--border)]">
-              {transactions.map((t) => (
+              {transactions.map((t) => {
+                const isTransfer = !!t.linked_transfer_txn_id;
+                const transferAccount = isTransfer ? accounts.find(a => a.id === t.account_id) : null;
+                return (
                 <div key={t.id} className="flex sm:grid sm:grid-cols-5 items-center px-5 py-3 hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors group">
                   <div className="flex items-center gap-3 col-span-2 flex-1 min-w-0">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs flex-shrink-0"
-                      style={{ background: `${t.color}20`, color: t.color }}>{t.category_name?.[0]}</div>
+                    <div className={clsx('w-8 h-8 rounded-xl flex items-center justify-center text-xs flex-shrink-0',
+                      isTransfer ? 'bg-brand-500/10 text-brand-500' : '')}
+                      style={!isTransfer ? { background: `${t.color}20`, color: t.color } : {}}>
+                      {isTransfer ? <ArrowLeftRight size={14} /> : t.category_name?.[0]}
+                    </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium truncate">{t.description || t.category_name}</p>
-                        {t.savings_goal_id && <PiggyBank size={12} className="text-brand-500 flex-shrink-0" title="Reserva para meta de ahorro" />}
-                        {t.debt_id && <CreditCard size={12} className="text-rose-400 flex-shrink-0" title="Pago de deuda" />}
-                        {t.credit_card_id && !t.is_card_payment && <CreditCard size={12} className="text-amber-500 flex-shrink-0" title="Cargo a tarjeta de crédito" />}
-                        {t.is_card_payment && <CreditCard size={12} className="text-green-500 flex-shrink-0" title="Pago de tarjeta" />}
+                        <p className="text-sm font-medium truncate">
+                          {isTransfer
+                            ? (t.description && t.description !== 'Transferencia entre cuentas' ? t.description : (transferAccount ? `${t.type === 'expense' ? '↑' : '↓'} ${transferAccount.name}` : 'Transferencia'))
+                            : (t.description || t.category_name)}
+                        </p>
+                        {isTransfer && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-500 font-medium flex-shrink-0">
+                            Transferencia
+                          </span>
+                        )}
+                        {!isTransfer && t.savings_goal_id && <PiggyBank size={12} className="text-brand-500 flex-shrink-0" title="Reserva para meta de ahorro" />}
+                        {!isTransfer && t.debt_id && <CreditCard size={12} className="text-rose-400 flex-shrink-0" title="Pago de deuda" />}
+                        {!isTransfer && t.credit_card_id && !t.is_card_payment && <CreditCard size={12} className="text-amber-500 flex-shrink-0" title="Cargo a tarjeta de crédito" />}
+                        {!isTransfer && t.is_card_payment && <CreditCard size={12} className="text-green-500 flex-shrink-0" title="Pago de tarjeta" />}
                       </div>
                       <p className="text-xs text-[var(--text-muted)] sm:hidden">{fmt.date(t.txn_date)}</p>
                     </div>
                   </div>
-                  <span className="hidden sm:block text-xs text-[var(--text-muted)]">{t.category_name}</span>
+                  <span className="hidden sm:block text-xs text-[var(--text-muted)]">
+                    {isTransfer ? 'Transferencia' : t.category_name}
+                  </span>
                   <span className="hidden sm:block text-xs text-[var(--text-muted)]">{fmt.date(t.txn_date)}</span>
                   <div className="flex items-center gap-2 ml-auto sm:justify-end">
                     <span className={clsx('text-sm text-mono font-semibold', t.type === 'income' ? 'text-income' : 'text-expense')}>
                       {t.type === 'income' ? '+' : '-'}{fmt.currency(t.amount, currency)}
                     </span>
                     <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openEdit(t)} className="p-1 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700">
-                        <Pencil size={13} className="text-[var(--text-muted)]" />
-                      </button>
+                      {!isTransfer && (
+                        <button onClick={() => openEdit(t)} className="p-1 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700">
+                          <Pencil size={13} className="text-[var(--text-muted)]" />
+                        </button>
+                      )}
                       <button onClick={() => setDeleting(t)} className="p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20">
                         <Trash2 size={13} className="text-rose-400" />
                       </button>
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -436,7 +469,7 @@ export default function Transactions() {
       )}
 
       {/* ── Modal nueva/editar transacción ── */}
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar transacción' : 'Nueva transacción'}>
+      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar transacción' : form.type === 'transfer' ? 'Nueva transferencia' : 'Nueva transacción'}>
         <form onSubmit={save} className="space-y-4">
 
           {/* OCR: scan receipt button (PRO) — only for new transactions */}
@@ -475,10 +508,10 @@ export default function Transactions() {
             </>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={clsx('gap-3', accounts.length >= 2 && !editing ? 'grid grid-cols-3' : 'grid grid-cols-2')}>
             {['income', 'expense'].map((tp) => (
               <button key={tp} type="button"
-                onClick={() => setForm({ ...form, type: tp, category_id: '', debt_id: '', savings_goal_id: '', credit_card_id: '' })}
+                onClick={() => setForm({ ...form, type: tp, category_id: '', debt_id: '', savings_goal_id: '', credit_card_id: '', transfer_from_account_id: '', transfer_to_account_id: '' })}
                 className={clsx(
                   'p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2',
                   form.type === tp
@@ -490,14 +523,55 @@ export default function Transactions() {
                 {tp === 'income' ? 'Ingreso' : 'Gasto'}
               </button>
             ))}
+            {accounts.length >= 2 && !editing && (
+              <button type="button"
+                onClick={() => setForm({ ...form, type: 'transfer', category_id: '', debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '' })}
+                className={clsx(
+                  'p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2',
+                  form.type === 'transfer'
+                    ? 'border-brand-500 bg-brand-500/10 text-brand-500'
+                    : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
+                )}>
+                <ArrowLeftRight size={16} /> Transferir
+              </button>
+            )}
           </div>
-          <div>
-            <label className="label">Categoría</label>
-            <select className="input" value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })} required>
-              <option value="">Seleccionar...</option>
-              {filteredCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+          {form.type === 'transfer' ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Cuenta origen</label>
+                <select className="input" value={form.transfer_from_account_id}
+                  onChange={e => setForm({ ...form, transfer_from_account_id: e.target.value })} required>
+                  <option value="">— Seleccionar —</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id} disabled={String(a.id) === String(form.transfer_to_account_id)}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Cuenta destino</label>
+                <select className="input" value={form.transfer_to_account_id}
+                  onChange={e => setForm({ ...form, transfer_to_account_id: e.target.value })} required>
+                  <option value="">— Seleccionar —</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id} disabled={String(a.id) === String(form.transfer_from_account_id)}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="label">Categoría</label>
+              <select className="input" value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })} required>
+                <option value="">Seleccionar...</option>
+                {filteredCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Monto</label>
@@ -515,7 +589,7 @@ export default function Transactions() {
             <input className="input" type="text" placeholder="Ej: Supermercado La Colonia"
               value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
           </div>
-          {form.type === 'expense' && activeDebts.length > 0 && (
+          {form.type === 'expense' && activeDebts.length > 0 && form.type !== 'transfer' && (
             <div>
               <label className="label">Vincular a deuda (opcional)</label>
               <select className="input" value={form.debt_id}
@@ -535,7 +609,7 @@ export default function Transactions() {
               <p className="text-xs text-[var(--text-muted)] mt-1">Se aplica directo al capital y reduce los intereses futuros</p>
             </div>
           )}
-          {form.type === 'expense' && !form.debt_id && activeGoals.length > 0 && (
+          {form.type === 'expense' && !form.debt_id && activeGoals.length > 0 && form.type !== 'transfer' && (
             <div>
               <label className="label">Vincular a meta de ahorro (opcional)</label>
               <select className="input" value={form.savings_goal_id}
@@ -547,8 +621,8 @@ export default function Transactions() {
               </select>
             </div>
           )}
-          {/* ── Forma de pago ── */}
-          {(accounts.length > 0 || creditCards.length > 0) && (() => {
+          {/* ── Forma de pago (ocultar en transferencias) ── */}
+          {form.type !== 'transfer' && (accounts.length > 0 || creditCards.length > 0) && (() => {
             const payMethod = form.payment_method || 'cash';
             const setMethod = (m) => setForm(f => ({
               ...f,
@@ -803,8 +877,12 @@ export default function Transactions() {
         open={!!deleting}
         onClose={() => setDeleting(null)}
         onConfirm={confirmDelete}
-        title="Eliminar transacción"
-        message={`¿Eliminar "${deleting?.description || deleting?.category_name}"? Esta acción no se puede deshacer.`}
+        title={deleting?.linked_transfer_txn_id ? 'Eliminar transferencia' : 'Eliminar transacción'}
+        message={
+          deleting?.linked_transfer_txn_id
+            ? 'Se eliminarán ambas partes de la transferencia (egreso e ingreso). ¿Continuar?'
+            : `¿Eliminar "${deleting?.description || deleting?.category_name}"? Esta acción no se puede deshacer.`
+        }
       />
 
       <Confirm

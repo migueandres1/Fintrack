@@ -357,6 +357,20 @@ export async function remove(req, res) {
       savings_goal_id: txn.savings_goal_id,
     });
 
+    // Si es parte de una transferencia, borrar también la transacción pareada
+    if (txn.linked_transfer_txn_id) {
+      const [[paired]] = await conn.query(
+        'SELECT * FROM transactions WHERE id = ?', [txn.linked_transfer_txn_id]
+      );
+      if (paired) {
+        await reverseEffects(conn, paired.id, {
+          debt_id:         paired.debt_id,
+          savings_goal_id: paired.savings_goal_id,
+        });
+        await conn.query('DELETE FROM transactions WHERE id = ?', [paired.id]);
+      }
+    }
+
     await conn.query('DELETE FROM transactions WHERE id = ?', [id]);
 
     await conn.commit();
@@ -364,6 +378,115 @@ export async function remove(req, res) {
   } catch (err) {
     await conn.rollback();
     console.error(err);
+    res.status(500).json({ error: 'Error interno' });
+  } finally {
+    conn.release();
+  }
+}
+
+export async function createTransfer(req, res) {
+  const uid = req.userId;
+  const { from_account_id, to_account_id, amount, description, txn_date, shared = false } = req.body;
+
+  if (!from_account_id || !to_account_id) {
+    return res.status(400).json({ error: 'Debes seleccionar cuenta origen y cuenta destino' });
+  }
+  if (Number(from_account_id) === Number(to_account_id)) {
+    return res.status(400).json({ error: 'La cuenta origen y destino deben ser diferentes' });
+  }
+
+  const fam = await getUserFamily(uid);
+  const fid = fam?.family_id ?? null;
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Validar que ambas cuentas pertenecen al usuario (o familia)
+    const accountClause = fid
+      ? 'id = ? AND (user_id = ? OR family_id = ?)'
+      : 'id = ? AND user_id = ?';
+    const accountParams = (aid) => fid ? [aid, uid, fid] : [aid, uid];
+
+    const [[fromAccount]] = await conn.query(
+      `SELECT id FROM bank_accounts WHERE ${accountClause}`, accountParams(from_account_id)
+    );
+    const [[toAccount]] = await conn.query(
+      `SELECT id FROM bank_accounts WHERE ${accountClause}`, accountParams(to_account_id)
+    );
+    if (!fromAccount || !toAccount) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Una o ambas cuentas no encontradas' });
+    }
+
+    let familyId = null;
+    if (shared && fid) familyId = fid;
+
+    // Buscar categoría "Transferencia" para egreso e ingreso
+    const findCat = async (type) => {
+      const [[cat]] = await conn.query(
+        `SELECT id FROM categories
+         WHERE (user_id IS NULL OR user_id = ?) AND type = ?
+           AND name IN ('Transferencia','Transferencias')
+         ORDER BY user_id DESC LIMIT 1`,
+        [uid, type]
+      );
+      if (cat) return cat.id;
+      const [[fallback]] = await conn.query(
+        `SELECT id FROM categories WHERE (user_id IS NULL OR user_id = ?) AND type = ? LIMIT 1`,
+        [uid, type]
+      );
+      return fallback?.id ?? null;
+    };
+
+    const expCatId = await findCat('expense');
+    const incCatId = await findCat('income');
+    if (!expCatId || !incCatId) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'No se encontraron categorías disponibles' });
+    }
+
+    const desc = description || 'Transferencia entre cuentas';
+
+    // 1. Egreso de la cuenta origen
+    const [expResult] = await conn.query(
+      `INSERT INTO transactions
+         (user_id, family_id, category_id, type, amount, description, txn_date, account_id)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [uid, familyId, expCatId, 'expense', amount, desc, txn_date, from_account_id]
+    );
+    const expId = expResult.insertId;
+
+    // 2. Ingreso a la cuenta destino
+    const [incResult] = await conn.query(
+      `INSERT INTO transactions
+         (user_id, family_id, category_id, type, amount, description, txn_date, account_id)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [uid, familyId, incCatId, 'income', amount, desc, txn_date, to_account_id]
+    );
+    const incId = incResult.insertId;
+
+    // 3. Vincular ambas transacciones entre sí
+    await conn.query(
+      'UPDATE transactions SET linked_transfer_txn_id = ? WHERE id = ?', [incId, expId]
+    );
+    await conn.query(
+      'UPDATE transactions SET linked_transfer_txn_id = ? WHERE id = ?', [expId, incId]
+    );
+
+    await conn.commit();
+
+    // Retornar ambas transacciones con sus datos completos
+    const [rows] = await conn.query(
+      `SELECT t.*, c.name AS category_name, c.icon, c.color
+       FROM transactions t JOIN categories c ON c.id = t.category_id
+       WHERE t.id IN (?, ?)`,
+      [expId, incId]
+    );
+    res.status(201).json(rows);
+  } catch (err) {
+    await conn.rollback();
+    console.error('[createTransfer]', err);
     res.status(500).json({ error: 'Error interno' });
   } finally {
     conn.release();

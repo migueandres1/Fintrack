@@ -66,6 +66,9 @@ r.get   ('/transactions/summary',        authenticate, txn.summary);
 r.get   ('/transactions/export',         authenticate, txn.exportCsv);
 r.post  ('/transactions/import-statement', authenticate, requireFeature('ocr'), upload.single('file'), txn.importStatement);
 
+// ── Transfers ──────────────────────────────────────────────────────────────
+r.post  ('/transfers', authenticate, requireLimit('tx_month', countTxMonth), txn.createTransfer);
+
 // ── Categories ─────────────────────────────────────────────────────────────
 r.get   ('/categories',          authenticate, cats.listVisible);
 r.get   ('/categories/manage',   authenticate, cats.listAll);
