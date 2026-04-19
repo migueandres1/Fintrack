@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MoniFlow — Favicon 08
+  Variación: Favicon optimizado para 32×32px
+  Uso: favicon.ico, browser tab, PWA manifest
+  Tamaño de exportación: 32×32px y 16×16px
+  viewBox: 32×32 — CUADRADO PERFECTO 1:1
+  Nota: A este tamaño las barras del chart se simplifican
+  para mantener legibilidad. Mismas proporciones 1:1.
+  Exportar como .ico (16px + 32px) y PNG 192×192 para PWA.
+-->
+<svg width="32" height="32"
+     viewBox="0 0 32 32"
+     xmlns="http://www.w3.org/2000/svg"
+     role="img"
+     aria-label="MoniFlow">
+  <title>MoniFlow</title>
+  <desc>MoniFlow favicon 32×32</desc>
+  <!-- Proporciones mantenidas: 5 zonas de 6.4px ≈ 6px cada una -->
+  <!-- Pierna izquierda: x=0..6 -->
+  <rect x="0"  y="0" width="6" height="32" fill="#0b1712"/>
+  <!-- Diagonal izquierda: top [6–13], bottom converge a [10–16], para en y=17 -->
+  <polygon points="6,0 13,0 16,17 10,17" fill="#0b1712"/>
+  <!-- Diagonal derecha: espejo -->
+  <polygon points="19,0 26,0 22,17 16,17" fill="#0b1712"/>
+  <!-- Pierna derecha: x=26..32 -->
+  <rect x="26" y="0" width="6" height="32" fill="#0b1712"/>
+  <!-- Barras chart simplificadas para legibilidad a 32px -->
+  <rect x="10" y="23" width="4" height="9" rx="0.5" fill="#00b894"/>
+  <rect x="14" y="18" width="4" height="14" rx="0.5" fill="#00b894"/>
+  <rect x="18" y="23" width="4" height="9" rx="0.5" fill="#00b894"/>
+</svg>

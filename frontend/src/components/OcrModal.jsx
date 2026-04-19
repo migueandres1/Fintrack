@@ -27,7 +27,7 @@ async function compressImage(file, maxPx = 1920, quality = 0.82) {
     return file;
   }
 }
-import { ScanLine, Upload, X, CheckCircle, AlertCircle, Loader2, ImageIcon, Banknote, CreditCard } from 'lucide-react';
+import { ScanLine, Upload, X, CheckCircle, AlertCircle, Loader2, ImageIcon, Banknote, CreditCard, Wallet, Landmark } from 'lucide-react';
 import { Modal } from './ui/index.jsx';
 import { fmt }   from '../utils/format.js';
 import api        from '../services/api.js';
@@ -262,10 +262,10 @@ export default function OcrModal({ open, onClose, onConfirm, categories = [], cr
                 <label className="label">Forma de pago</label>
                 <div className={clsx('grid gap-2', creditCards.length > 0 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2')}>
                   {[
-                    { value: 'cash',  label: 'Efectivo',       emoji: '💵' },
-                    { value: 'debit', label: 'Débito / Cuenta', emoji: '🏦' },
-                    ...(creditCards.length > 0 ? [{ value: 'card', label: 'Tarjeta de crédito', emoji: '💳' }] : []),
-                  ].map(({ value, label, emoji }) => (
+                    { value: 'cash',  label: 'Efectivo',         Icon: Wallet },
+                    { value: 'debit', label: 'Débito / Cuenta',  Icon: Landmark },
+                    ...(creditCards.length > 0 ? [{ value: 'card', label: 'Tarjeta de crédito', Icon: CreditCard }] : []),
+                  ].map(({ value, label, Icon }) => (
                     <button key={value} type="button"
                       onClick={() => setFields(f => ({
                         ...f,
@@ -279,7 +279,7 @@ export default function OcrModal({ open, onClose, onConfirm, categories = [], cr
                           ? 'border-brand-500 bg-brand-500/10 text-brand-500'
                           : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
                       )}>
-                      {emoji} {label}
+                      <Icon size={14} /> {label}
                     </button>
                   ))}
                 </div>

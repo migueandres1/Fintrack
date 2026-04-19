@@ -5,42 +5,32 @@ import {
   PiggyBank, Moon, Sun, LogOut, TrendingUp,
   CalendarRange, Wallet, BarChart2, Landmark,
   MoreHorizontal, Tags, BookOpen, Sparkles, AlertTriangle, Users,
+  ScanLine, Settings, X,
 } from 'lucide-react';
 import { useStore } from '../../store/index.js';
 import clsx        from 'clsx';
 
-// ── Nav agrupada (sidebar desktop) ────────────────────────────────────────
 const NAV_GROUPS = [
   {
-    label: null,
+    label: 'Principal',
     items: [
-      { to: '/app', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/app',              icon: LayoutDashboard, label: 'Resumen' },
+      { to: '/app/transactions', icon: ArrowRightLeft,  label: 'Transacciones' },
+      { to: '/app/accounts',     icon: Landmark,        label: 'Cuentas' },
+      { to: '/app/credit-cards', icon: CreditCard,      label: 'Tarjetas' },
     ],
   },
   {
-    label: 'Dinero',
+    label: 'Finanzas',
     items: [
-      { to: '/app/transactions', icon: ArrowRightLeft, label: 'Transacciones' },
-      { to: '/app/accounts',     icon: Landmark,       label: 'Cuentas' },
-      { to: '/app/credit-cards', icon: CreditCard,     label: 'Tarjetas' },
+      { to: '/app/savings',  icon: PiggyBank,     label: 'Metas' },
+      { to: '/app/debts',    icon: Wallet,        label: 'Deudas' },
+      { to: '/app/budget',   icon: BarChart2,     label: 'Presupuesto' },
+      { to: '/app/planning', icon: CalendarRange, label: 'Planificación', proOnly: true },
     ],
   },
   {
-    label: 'Control',
-    items: [
-      { to: '/app/budget',    icon: BarChart2,     label: 'Presupuesto' },
-      { to: '/app/planning',  icon: CalendarRange, label: 'Planificación', proOnly: true },
-    ],
-  },
-  {
-    label: 'Objetivos',
-    items: [
-      { to: '/app/debts',   icon: Wallet,    label: 'Deudas' },
-      { to: '/app/savings', icon: PiggyBank, label: 'Metas de ahorro' },
-    ],
-  },
-  {
-    label: 'Config',
+    label: 'Más',
     items: [
       { to: '/app/categories', icon: Tags,  label: 'Categorías' },
       { to: '/app/family',     icon: Users, label: 'Familia', familiaOnly: true },
@@ -48,72 +38,88 @@ const NAV_GROUPS = [
   },
 ];
 
-// ── Bottom tab bar (mobile): 4 tabs principales + "Más" ───────────────────
 const BOTTOM_TABS = [
   { to: '/app',              icon: LayoutDashboard, label: 'Inicio' },
-  { to: '/app/transactions', icon: ArrowRightLeft,  label: 'Movimientos' },
-  { to: '/app/budget',       icon: BarChart2,       label: 'Presupuesto' },
-  { to: '/app/accounts',     icon: Landmark,        label: 'Cuentas' },
+  { to: '/app/transactions', icon: ArrowRightLeft,  label: 'Movs' },
+  { to: '/app/savings',      icon: PiggyBank,       label: 'Metas' },
+  { to: '/app/accounts',     icon: Landmark,        label: 'Más' },
 ];
+
 const MORE_ITEMS_BASE = [
   { to: '/app/debts',        icon: Wallet,        label: 'Deudas' },
   { to: '/app/credit-cards', icon: CreditCard,    label: 'Tarjetas' },
-  { to: '/app/savings',      icon: PiggyBank,     label: 'Metas de ahorro' },
+  { to: '/app/budget',       icon: BarChart2,     label: 'Presupuesto' },
   { to: '/app/categories',   icon: Tags,          label: 'Categorías' },
   { to: '/app/family',       icon: Users,         label: 'Familia' },
   { to: '/app/planning',     icon: CalendarRange, label: 'Planificación', proOnly: true },
   { to: '/app/pricing',      icon: Sparkles,      label: 'Planes' },
 ];
 
-// ── Sidebar desktop ────────────────────────────────────────────────────────
-function UserRow({ user, onLogout }) {
-  const nav = useNavigate();
+// MoniFlow mark logo (4 bars)
+function MFMark({ size = 24 }) {
+  const s = size;
+  const barW = Math.round(s * 0.14);
+  const gap  = Math.round(s * 0.09);
+  const heights = [0.45, 0.65, 0.85, 1.0].map(h => Math.round(s * h));
+  const totalW = barW * 4 + gap * 3;
+  const padX = Math.round((s - totalW) / 2);
+  const padY = Math.round(s * 0.06);
   return (
-    <div className="flex items-center gap-3 px-4 py-2">
-      <button
-        onClick={() => nav('/app/profile')}
-        className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold text-sm hover:bg-brand-500/30 transition-colors shrink-0"
-        title="Mi perfil"
-      >
-        {user?.name?.[0]?.toUpperCase()}
-      </button>
-      <button onClick={() => nav('/app/profile')} className="flex-1 min-w-0 text-left hover:opacity-80 transition-opacity">
-        <p className="text-xs font-medium text-white truncate">{user?.name}</p>
-        <p className="text-xs text-white/40 truncate">{user?.currency}</p>
-      </button>
-      <button onClick={onLogout} className="text-white/40 hover:text-rose-400 transition-colors" title="Cerrar sesión">
-        <LogOut size={16} />
-      </button>
-    </div>
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none">
+      <rect width={s} height={s} rx={Math.round(s * 0.18)} fill="#0b1712" />
+      {heights.map((h, i) => (
+        <rect
+          key={i}
+          x={padX + i * (barW + gap)}
+          y={s - padY - h}
+          width={barW}
+          height={h}
+          rx={Math.round(barW * 0.4)}
+          fill="#00b894"
+        />
+      ))}
+    </svg>
   );
 }
 
 function Sidebar({ onLogout, user, darkMode, toggleDark }) {
-  const billingStatus = useStore((s) => s.billingStatus);
-  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
+  const billingStatus  = useStore((s) => s.billingStatus);
+  const effectivePlan  = billingStatus?.plan ?? user?.plan ?? 'free';
   const nav = useNavigate();
 
+  const initials = user?.name
+    ? user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?';
+
   return (
-    <div className="flex flex-col h-full px-3 py-5">
-      <div className="flex items-center gap-2.5 px-4 mb-6">
-        <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center">
-          <TrendingUp size={16} className="text-white" />
-        </div>
-        <span className="text-display text-white font-bold text-lg tracking-tight">MoniFlow</span>
+    <div className="flex flex-col h-full">
+      {/* Brand */}
+      <div
+        className="flex items-center gap-2.5 px-5 py-5"
+        style={{ borderBottom: '1px solid var(--g800)' }}
+      >
+        <MFMark size={28} />
+        <span
+          className="text-display font-semibold"
+          style={{ fontFamily: 'var(--fb)', fontWeight: 600, fontSize: 15, color: '#f0f5f3', letterSpacing: '-.02em' }}
+        >
+          MoniFlow
+        </span>
       </div>
 
-      <nav className="flex flex-col gap-0.5 flex-1 pt-1 overflow-y-auto">
+      {/* Nav */}
+      <nav className="flex flex-col flex-1 px-3 py-4 gap-0.5 overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => {
-          // proOnly items hidden on free; familiaOnly items always shown (page shows upgrade msg)
           const visibleItems = group.items.filter(item => !(item.proOnly && effectivePlan === 'free'));
           if (visibleItems.length === 0) return null;
           return (
             <div key={gi} className={gi > 0 ? 'mt-3' : ''}>
-              {group.label && (
-                <p className="px-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/25">
-                  {group.label}
-                </p>
-              )}
+              <p
+                className="px-3 pb-1.5 pt-1"
+                style={{ fontFamily: 'var(--fm)', fontSize: 9, fontWeight: 600, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--g400)' }}
+              >
+                {group.label}
+              </p>
               {visibleItems.map(({ to, icon: Icon, label }) => (
                 <NavLink
                   key={to}
@@ -121,15 +127,23 @@ function Sidebar({ onLogout, user, darkMode, toggleDark }) {
                   end={to === '/app'}
                   className={({ isActive }) =>
                     clsx(
-                      'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all',
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
                       isActive
-                        ? 'bg-brand-500/15 text-brand-400'
-                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                        ? 'text-[#0b1712]'
+                        : 'hover:bg-white/5'
                     )
                   }
+                  style={({ isActive }) => isActive
+                    ? { background: 'var(--c500)', color: '#0b1712', fontWeight: 600 }
+                    : { color: 'var(--g400)' }
+                  }
                 >
-                  <Icon size={18} />
-                  {label}
+                  {({ isActive }) => (
+                    <>
+                      <Icon size={16} style={{ opacity: isActive ? 1 : .7 }} />
+                      {label}
+                    </>
+                  )}
                 </NavLink>
               ))}
             </div>
@@ -137,114 +151,186 @@ function Sidebar({ onLogout, user, darkMode, toggleDark }) {
         })}
       </nav>
 
-      <div className="mt-2 pt-3 border-t border-white/5 flex flex-col gap-1">
+      {/* Footer links */}
+      <div className="px-3 pb-2" style={{ borderTop: '1px solid var(--g800)', paddingTop: 12 }}>
         <NavLink
           to="/app/pricing"
           className={({ isActive }) =>
-            clsx(
-              'flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium transition-all',
-              isActive ? 'bg-brand-500/15 text-brand-400' : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-            )
+            clsx('flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all', isActive ? 'text-[var(--c500)]' : 'hover:bg-white/5')
           }
+          style={({ isActive }) => ({ color: isActive ? 'var(--c500)' : 'var(--g400)' })}
         >
-          <Sparkles size={14} />
+          <Sparkles size={13} />
           Planes
         </NavLink>
         <NavLink
           to="/app/guide"
           className={({ isActive }) =>
-            clsx(
-              'flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-medium transition-all',
-              isActive ? 'bg-brand-500/15 text-brand-400' : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-            )
+            clsx('flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all', isActive ? 'text-[var(--c500)]' : 'hover:bg-white/5')
           }
+          style={({ isActive }) => ({ color: isActive ? 'var(--c500)' : 'var(--g400)' })}
         >
-          <BookOpen size={14} />
+          <BookOpen size={13} />
           Guía de usuario
         </NavLink>
         <button
           onClick={toggleDark}
-          className="flex items-center gap-3 px-4 py-2 rounded-xl text-xs text-white/40 hover:text-white/70 hover:bg-white/5 transition-all"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium w-full hover:bg-white/5 transition-all"
+          style={{ color: 'var(--g400)' }}
         >
-          {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+          {darkMode ? <Sun size={13} /> : <Moon size={13} />}
           {darkMode ? 'Modo claro' : 'Modo oscuro'}
         </button>
-        <UserRow user={user} onLogout={onLogout} />
+      </div>
+
+      {/* User row */}
+      <div
+        className="flex items-center gap-3 px-4 py-4 cursor-pointer hover:bg-white/5 transition-all"
+        style={{ borderTop: '1px solid var(--g800)' }}
+        onClick={() => nav('/app/profile')}
+      >
+        <div
+          className="flex-shrink-0 flex items-center justify-center rounded-full text-xs font-bold"
+          style={{ width: 32, height: 32, background: 'linear-gradient(135deg, var(--c500), var(--cdark))', color: '#0b1712' }}
+        >
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold truncate" style={{ color: '#f0f5f3' }}>{user?.name}</p>
+          <p className="text-xs truncate" style={{ color: 'var(--g400)' }}>{user?.currency} · {effectivePlan}</p>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onLogout(); }}
+          className="p-1 rounded transition-colors hover:text-rose-400"
+          style={{ color: 'var(--g400)' }}
+          title="Cerrar sesión"
+        >
+          <LogOut size={14} />
+        </button>
       </div>
     </div>
   );
 }
 
-// ── Bottom tab bar ─────────────────────────────────────────────────────────
-function BottomTabBar({ moreOpen, setMoreOpen }) {
-  const location = useLocation();
+// Mobile bottom tab bar — 5 tabs: Inicio, Movs, [scan btn], Metas, Más
+function BottomTabBar({ moreOpen, setMoreOpen, onScan }) {
+  const location    = useLocation();
   const isMoreActive = MORE_ITEMS_BASE.some(n => location.pathname.startsWith(n.to))
     || location.pathname.startsWith('/app/profile');
 
+  const tabs = [
+    { to: '/app',              icon: LayoutDashboard, label: 'Inicio' },
+    { to: '/app/transactions', icon: ArrowRightLeft,  label: 'Movs'   },
+  ];
+  const tabsRight = [
+    { to: '/app/savings', icon: PiggyBank, label: 'Metas' },
+  ];
+
   return (
     <nav
-      className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[var(--sidebar-bg)] border-t border-white/8 flex items-stretch"
-      style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 6px)' }}
+      className="lg:hidden fixed bottom-0 inset-x-0 z-40 flex items-end"
+      style={{
+        background: 'rgba(11,23,18,.97)',
+        backdropFilter: 'blur(20px)',
+        borderTop: '1px solid var(--g800)',
+        paddingBottom: 'max(env(safe-area-inset-bottom), 6px)',
+      }}
     >
-      {BOTTOM_TABS.map(({ to, icon: Icon, label }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === '/app'}
-          onClick={() => setMoreOpen(false)}
-          className={({ isActive }) =>
-            clsx(
-              'flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 transition-colors',
-              isActive ? 'text-brand-400' : 'text-white/45 hover:text-white/70'
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <div className={clsx('p-1 rounded-xl transition-all', isActive && 'bg-brand-500/15')}>
-                <Icon size={20} />
-              </div>
-              <span className="text-[9px] leading-none mt-0.5 truncate max-w-[56px] text-center">{label}</span>
-            </>
-          )}
-        </NavLink>
-      ))}
+      <div className="flex items-stretch w-full px-2">
+        {/* Left tabs */}
+        {tabs.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === '/app'}
+            onClick={() => setMoreOpen(false)}
+            className="flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 transition-colors"
+          >
+            {({ isActive }) => (
+              <>
+                <div className={clsx('p-1 rounded-xl transition-all', isActive && 'bg-[var(--c500)]/15')}>
+                  <Icon size={20} style={{ color: isActive ? 'var(--c500)' : 'var(--g400)' }} />
+                </div>
+                <span className="text-[9px] leading-none mt-0.5" style={{ color: isActive ? 'var(--c500)' : 'var(--g400)' }}>{label}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
 
-      {/* Botón "Más" */}
-      <button
-        onClick={() => setMoreOpen(v => !v)}
-        className={clsx(
-          'flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 transition-colors',
-          moreOpen || isMoreActive ? 'text-brand-400' : 'text-white/45 hover:text-white/70'
-        )}
-      >
-        <div className={clsx('p-1 rounded-xl transition-all', (moreOpen || isMoreActive) && 'bg-brand-500/15')}>
-          <MoreHorizontal size={20} />
+        {/* Center scan button */}
+        <div className="flex flex-col items-center justify-center flex-1 relative">
+          <button
+            onClick={onScan}
+            className="flex items-center justify-center rounded-full transition-transform active:scale-95"
+            style={{
+              width: 52, height: 52,
+              background: 'var(--c500)',
+              color: '#0b1712',
+              boxShadow: '0 8px 20px -4px rgba(0,184,148,.4)',
+              marginTop: -16,
+            }}
+          >
+            <ScanLine size={22} />
+          </button>
         </div>
-        <span className="text-[9px] leading-none mt-0.5">Más</span>
-      </button>
+
+        {/* Right tabs */}
+        {tabsRight.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            onClick={() => setMoreOpen(false)}
+            className="flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 transition-colors"
+          >
+            {({ isActive }) => (
+              <>
+                <div className={clsx('p-1 rounded-xl transition-all', isActive && 'bg-[var(--c500)]/15')}>
+                  <Icon size={20} style={{ color: isActive ? 'var(--c500)' : 'var(--g400)' }} />
+                </div>
+                <span className="text-[9px] leading-none mt-0.5" style={{ color: isActive ? 'var(--c500)' : 'var(--g400)' }}>{label}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
+
+        {/* Más */}
+        <button
+          onClick={() => setMoreOpen(v => !v)}
+          className="flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 transition-colors"
+        >
+          <div className={clsx('p-1 rounded-xl transition-all', (moreOpen || isMoreActive) && 'bg-[var(--c500)]/15')}>
+            <MoreHorizontal size={20} style={{ color: (moreOpen || isMoreActive) ? 'var(--c500)' : 'var(--g400)' }} />
+          </div>
+          <span className="text-[9px] leading-none mt-0.5" style={{ color: (moreOpen || isMoreActive) ? 'var(--c500)' : 'var(--g400)' }}>Más</span>
+        </button>
+      </div>
     </nav>
   );
 }
 
-// ── Bottom sheet "Más" ─────────────────────────────────────────────────────
 function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
   const nav = useNavigate();
-  const billingStatus = useStore((s) => s.billingStatus);
-  const effectivePlan = billingStatus?.plan ?? user?.plan ?? 'free';
+  const billingStatus  = useStore((s) => s.billingStatus);
+  const effectivePlan  = billingStatus?.plan ?? user?.plan ?? 'free';
   const moreItems = MORE_ITEMS_BASE.filter(item => !(item.proOnly && effectivePlan === 'free'));
+  const initials = user?.name
+    ? user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?';
 
   if (!open) return null;
   return (
     <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative bg-[var(--bg-card)] rounded-t-2xl animate-fade-up"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.5rem)' }}
+        className="relative animate-fade-up rounded-t-2xl"
+        style={{
+          background: 'var(--bg-card)',
+          paddingBottom: 'max(env(safe-area-inset-bottom), 0.5rem)',
+        }}
       >
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-9 h-1 rounded-full bg-[var(--border)]" />
+          <div className="w-9 h-1 rounded-full" style={{ background: 'var(--border)' }} />
         </div>
 
         <div className="px-4 pb-2 pt-1 grid grid-cols-2 gap-2">
@@ -256,11 +342,10 @@ function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
               className={({ isActive }) =>
                 clsx(
                   'flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-medium transition-all',
-                  isActive
-                    ? 'bg-brand-500/15 text-brand-400'
-                    : 'bg-[var(--surface-2)] text-[var(--text)] hover:bg-[var(--surface-2)]'
+                  isActive ? 'text-[var(--c500)]' : 'text-[var(--text)]'
                 )
               }
+              style={({ isActive }) => ({ background: isActive ? 'rgba(0,184,148,.1)' : 'var(--surface-2)' })}
             >
               <Icon size={20} />
               {label}
@@ -268,31 +353,39 @@ function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
           ))}
         </div>
 
-        {/* Divider + acciones de cuenta */}
-        <div className="mx-4 mt-1 pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
+        <div
+          className="mx-4 mt-1 pt-3 flex items-center justify-between gap-2"
+          style={{ borderTop: '1px solid var(--border)' }}
+        >
           <button
             onClick={() => { nav('/app/profile'); onClose(); }}
-            className="flex items-center gap-2.5 flex-1 px-4 py-3 rounded-2xl bg-[var(--surface-2)] text-sm font-medium text-[var(--text)]"
+            className="flex items-center gap-2.5 flex-1 px-4 py-3 rounded-2xl text-sm font-medium"
+            style={{ background: 'var(--surface-2)', color: 'var(--text)' }}
           >
-            <div className="w-7 h-7 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold text-xs">
-              {user?.name?.[0]?.toUpperCase()}
+            <div
+              className="flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0"
+              style={{ width: 28, height: 28, background: 'linear-gradient(135deg, var(--c500), var(--cdark))', color: '#0b1712' }}
+            >
+              {initials}
             </div>
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold">{user?.name}</p>
-              <p className="truncate text-[10px] text-[var(--text-muted)]">{user?.currency}</p>
+              <p className="truncate text-[10px]" style={{ color: 'var(--text-muted)' }}>{user?.currency}</p>
             </div>
           </button>
 
           <button
             onClick={toggleDark}
-            className="p-3.5 rounded-2xl bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+            className="p-3.5 rounded-2xl transition-colors"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)' }}
           >
             {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
           <button
             onClick={onLogout}
-            className="p-3.5 rounded-2xl bg-[var(--surface-2)] text-rose-400 transition-colors"
+            className="p-3.5 rounded-2xl transition-colors"
+            style={{ background: 'var(--surface-2)', color: '#e53e3e' }}
           >
             <LogOut size={18} />
           </button>
@@ -304,7 +397,6 @@ function MoreSheet({ open, onClose, user, darkMode, toggleDark, onLogout }) {
   );
 }
 
-// ── Layout principal ───────────────────────────────────────────────────────
 export default function AppLayout() {
   const [moreOpen, setMoreOpen] = useState(false);
   const { user, darkMode, toggleDark, logout, fetchBillingStatus, billingStatus } = useStore();
@@ -314,12 +406,18 @@ export default function AppLayout() {
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
+  // Scan shortcut — navigate to transactions with scan param
+  const handleScan = () => { navigate('/app/transactions?scan=1'); setMoreOpen(false); };
+
   const trialExpired = billingStatus?.trial_expired;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--bg)]">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       {/* Sidebar desktop */}
-      <aside className="hidden lg:flex w-56 flex-shrink-0 flex-col bg-[var(--sidebar-bg)]">
+      <aside
+        className="hidden lg:flex w-[220px] flex-shrink-0 flex-col"
+        style={{ background: 'var(--g950)' }}
+      >
         <Sidebar
           user={user}
           darkMode={darkMode}
@@ -330,44 +428,54 @@ export default function AppLayout() {
 
       {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 overflow-auto">
-        {/* Mobile top bar — logo solamente */}
-        <div className="lg:hidden sticky top-0 z-40 flex items-center gap-2 px-4 py-3 bg-[var(--bg-card)] border-b border-[var(--border)]"
-          style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
-          <div className="w-6 h-6 rounded bg-brand-500 flex items-center justify-center">
-            <TrendingUp size={12} className="text-white" />
-          </div>
-          <span className="text-display font-bold text-sm">MoniFlow</span>
+        {/* Mobile top bar */}
+        <div
+          className="lg:hidden sticky top-0 z-40 flex items-center gap-2.5 px-4 py-3"
+          style={{
+            background: 'var(--bg-card)',
+            borderBottom: '1px solid var(--border)',
+            paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+          }}
+        >
+          <MFMark size={24} />
+          <span
+            className="font-semibold"
+            style={{ fontFamily: 'var(--fb)', fontSize: 15, color: 'var(--text)', letterSpacing: '-.02em' }}
+          >
+            MoniFlow
+          </span>
         </div>
 
-        {/* Banner prueba terminada */}
         {trialExpired && (
-          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-600 dark:text-amber-400">
-            <div className="flex items-center gap-2 text-sm">
+          <div
+            className="flex items-center justify-between gap-3 px-4 py-2.5"
+            style={{ background: 'rgba(240,165,0,.08)', borderBottom: '1px solid rgba(240,165,0,.15)' }}
+          >
+            <div className="flex items-center gap-2 text-sm" style={{ color: '#b87200' }}>
               <AlertTriangle size={15} className="shrink-0" />
               <span>Tu prueba gratis terminó. Algunas funciones están limitadas.</span>
             </div>
             <button
               onClick={() => navigate('/app/pricing')}
-              className="shrink-0 text-xs font-semibold px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-white transition-colors"
+              className="shrink-0 text-xs font-semibold px-3 py-1 rounded-lg transition-colors"
+              style={{ background: '#f0a500', color: '#0b1712' }}
             >
               Elegir plan
             </button>
           </div>
         )}
 
-        {/* Contenido — pb-24 en mobile para no quedar bajo el tab bar */}
+        {/* Content */}
         <div
-          className="flex-1 p-4 lg:p-6 lg:pb-6 max-w-7xl mx-auto w-full"
+          className="flex-1 p-4 lg:p-6 max-w-7xl mx-auto w-full"
           style={{ paddingBottom: 'max(6rem, calc(4rem + env(safe-area-inset-bottom)))' }}
         >
           <Outlet />
         </div>
       </main>
 
-      {/* Bottom tab bar (mobile) */}
-      <BottomTabBar moreOpen={moreOpen} setMoreOpen={setMoreOpen} />
+      <BottomTabBar moreOpen={moreOpen} setMoreOpen={setMoreOpen} onScan={handleScan} />
 
-      {/* Bottom sheet "Más" */}
       <MoreSheet
         open={moreOpen}
         onClose={() => setMoreOpen(false)}

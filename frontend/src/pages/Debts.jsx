@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, CalendarPlus, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, CalendarPlus, X, Zap } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
-import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
+import { Modal, Confirm, Empty, Spinner } from '../components/ui/index.jsx';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import api from '../services/api.js';
-import clsx from 'clsx';
 
 const EMPTY_DEBT = {
   name: '', initial_balance: '', annual_rate: '', monthly_payment: '',
@@ -21,20 +20,20 @@ function ChartTooltip({ active, payload, currency }) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload;
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-2.5 shadow-xl text-xs min-w-[160px]">
-      <p className="font-semibold mb-2 text-[var(--text)]">{d?.label}</p>
-      <div className="space-y-1">
-        <div className="flex justify-between gap-4">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-green-500 inline-block" />Capital</span>
-          <span className="font-medium text-green-500">{fmt.currency(d?.principal, currency)}</span>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', fontSize: 11, minWidth: 160 }}>
+      <p style={{ fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>{d?.label}</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+          <span style={{ color: 'var(--text-muted)' }}>Capital</span>
+          <span style={{ fontWeight: 500, color: 'var(--c500)', fontFamily: 'var(--fm)' }}>{fmt.currency(d?.principal, currency)}</span>
         </div>
-        <div className="flex justify-between gap-4">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-rose-500 inline-block" />Interés</span>
-          <span className="font-medium text-rose-500">{fmt.currency(d?.interest, currency)}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+          <span style={{ color: 'var(--text-muted)' }}>Interés</span>
+          <span style={{ fontWeight: 500, color: '#e53e3e', fontFamily: 'var(--fm)' }}>{fmt.currency(d?.interest, currency)}</span>
         </div>
-        <div className="border-t border-[var(--border)] pt-1 mt-1 flex justify-between gap-4">
-          <span className="text-[var(--text-muted)]">Saldo restante</span>
-          <span className="font-semibold text-mono">{fmt.currency(d?.balance, currency)}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, paddingTop: 4, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+          <span style={{ color: 'var(--text-muted)' }}>Saldo</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--fm)', color: 'var(--text)' }}>{fmt.currency(d?.balance, currency)}</span>
         </div>
       </div>
     </div>
@@ -43,7 +42,8 @@ function ChartTooltip({ active, payload, currency }) {
 
 const EMPTY_PLANNED = { planned_date: '', amount: '', notes: '' };
 
-function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
+// ── Debt row (matches handoff DebtsScreen) ────────────────────────────────────
+function DebtRow({ debt, currency, onEdit, onDelete, onPay, index, isLast }) {
   const { addDebtPlanned, removeDebtPlanned } = useStore();
   const [expanded, setExpanded] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -52,9 +52,22 @@ function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
   const [plannedForm, setPlannedForm] = useState(EMPTY_PLANNED);
   const [plannedBusy, setPlannedBusy] = useState(false);
 
-  const paidPct = 100 - (debt.current_balance / (debt.initial_balance || 1)) * 100;
-  // Use fresh detail.projection when loaded (reflects latest planned payments)
-  const proj = detail?.projection || debt.projection;
+  const paidPct = Math.min(100, 100 - (debt.current_balance / (debt.initial_balance || 1)) * 100);
+  const proj    = detail?.projection || debt.projection;
+  const isFocus = index === 0; // highest rate first (avalanche)
+
+  const nextDueLabel = (() => {
+    const day = Math.max(1, Math.min(31, Number(debt.payment_day) || 1));
+    const today = new Date();
+    const clamp = (y, m) => Math.min(day, new Date(y, m + 1, 0).getDate());
+    let next = new Date(today.getFullYear(), today.getMonth(), clamp(today.getFullYear(), today.getMonth()));
+    if (next <= today) {
+      const nm = today.getMonth() + 1;
+      const ny = nm > 11 ? today.getFullYear() + 1 : today.getFullYear();
+      next = new Date(ny, nm % 12, clamp(ny, nm % 12));
+    }
+    return next.toLocaleDateString('es', { day: '2-digit', month: 'short' });
+  })();
 
   const buildScheduleData = (schedule) =>
     schedule?.slice(0, 48).map(r => ({
@@ -102,99 +115,119 @@ function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
   };
 
   return (
-    <div className="card transition-all">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
-            <CreditCard size={18} />
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm">{debt.name}</h3>
-            <p className="text-xs text-[var(--text-muted)]">
-              {fmt.pct(debt.annual_rate)} anual · Vence día {debt.payment_day}
-            </p>
+    <div style={{ padding: '14px 0', borderBottom: isLast ? 'none' : '1px solid var(--border)' }}>
+      {/* Top row: name + balance */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{debt.name}</span>
+            {isFocus && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: 'var(--c100)', color: 'var(--cdark)',
+                borderRadius: 999, padding: '2px 8px',
+                fontSize: 9, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase',
+              }}>
+                <Zap size={10} /> FOCO
+              </span>
+            )}
             {debt.card_name && (
-              <span className="inline-flex items-center gap-1 mt-1 text-xs text-brand-400 bg-brand-500/10 px-1.5 py-0.5 rounded-md">
-                <CreditCard size={11} /> {debt.card_name} ••{debt.card_last_four}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--surface-2)', color: 'var(--text-muted)', borderRadius: 20, padding: '2px 8px', fontSize: 10 }}>
+                <CreditCard size={10} /> {debt.card_name} ••{debt.card_last_four}
               </span>
             )}
           </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+            {fmt.pct(debt.annual_rate)} TAE · próximo {nextDueLabel}
+          </div>
         </div>
-        <div className="flex gap-1">
-          <button onClick={() => onPay(debt)}
-            className="px-2 py-1 rounded-lg text-xs font-medium bg-brand-500/10 text-brand-500 hover:bg-brand-500/20 transition-colors">
-            + Pago
+        <div style={{ textAlign: 'right' }}>
+          <div style={{
+            fontSize: 14, fontWeight: 600, color: 'var(--text)',
+            fontFamily: 'var(--fm)', fontVariantNumeric: 'tabular-nums',
+          }}>
+            {fmt.currency(debt.current_balance, currency)}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--fm)', marginTop: 1 }}>
+            de {fmt.currency(debt.initial_balance, currency)}
+          </div>
+        </div>
+      </div>
+
+      {/* Debt meter (red track, green fill) */}
+      <div className="debt-meter">
+        <div className="debt-meter-fill" style={{ width: `${paidPct}%` }} />
+      </div>
+
+      {/* Bottom row: % + pay button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--fm)' }}>
+          {paidPct.toFixed(0)}% pagado
+        </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {proj?.totalInterest > 0 && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+              +{fmt.currency(proj.totalInterest, currency)} interés
+            </span>
+          )}
+          <button
+            onClick={() => onPay(debt)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+              borderRadius: 999, background: 'var(--c100)', color: 'var(--cdark)',
+              border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Pagar {fmt.currency(debt.monthly_payment, currency)}
           </button>
-          <button onClick={() => onEdit(debt)} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700">
-            <Pencil size={13} className="text-[var(--text-muted)]" />
+          <button onClick={() => onEdit(debt)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
+            <Pencil size={12} />
           </button>
-          <button onClick={() => onDelete(debt)} className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20">
-            <Trash2 size={13} className="text-rose-400" />
+          <button onClick={() => onDelete(debt)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', padding: 4 }}>
+            <Trash2 size={12} />
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div>
-          <p className="text-xs text-[var(--text-muted)]">Saldo actual</p>
-          <p className="text-display font-bold text-base text-mono text-rose-500">{fmt.currency(debt.current_balance, currency)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--text-muted)]">Cuota mensual</p>
-          <p className="font-semibold text-sm text-mono">{fmt.currency(debt.monthly_payment, currency)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--text-muted)]">Payoff</p>
-          <p className="font-semibold text-sm">{fmt.months(proj?.months)}</p>
-        </div>
-      </div>
-
-      <div className="mb-3">
-        <div className="flex justify-between text-xs mb-1">
-          <span className="text-[var(--text-muted)]">Progreso</span>
-          <span className="font-medium">{paidPct.toFixed(1)}% pagado</span>
-        </div>
-        <ProgressBar value={paidPct} max={100} color="#f43f5e" />
-      </div>
-
-      <div className="flex justify-between text-xs text-[var(--text-muted)] mb-3">
-        <span>Intereses restantes: <strong className="text-[var(--text)]">{fmt.currency(proj?.totalInterest, currency)}</strong></span>
-        <span>Termina: <strong className="text-[var(--text)]">{proj?.payoffDate ? fmt.date(proj.payoffDate) : '—'}</strong></span>
-      </div>
-
-      <button onClick={loadDetail} disabled={loadingDetail}
-        className="w-full flex items-center justify-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] py-1 transition-colors">
-        {loadingDetail ? 'Cargando...' : expanded
-          ? <><ChevronUp size={14} /> Ocultar detalle</>
-          : <><ChevronDown size={14} /> Ver proyección y pagos</>}
+      {/* Expandable detail */}
+      <button
+        onClick={loadDetail}
+        disabled={loadingDetail}
+        style={{
+          marginTop: 8, width: '100%', fontSize: 11, color: 'var(--text-muted)',
+          background: 'none', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          padding: '4px 0',
+        }}
+      >
+        {loadingDetail ? 'Cargando…' : expanded
+          ? <><ChevronUp size={13} /> Ocultar detalle</>
+          : <><ChevronDown size={13} /> Ver proyección y pagos</>
+        }
       </button>
 
       {expanded && detail && (
-        <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-5 animate-fade-up">
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }} className="animate-fade-up space-y-5">
 
-          {/* ── Gráfica de amortización ── */}
+          {/* Amortization chart */}
           {scheduleData.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <h4 className="text-xs font-semibold">Proyección de amortización</h4>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <h4 style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Proyección de amortización</h4>
                 {hasPlan && (
-                  <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
-                    <span className="w-3 h-0.5 bg-green-500 inline-block rounded" />
+                  <span style={{ fontSize: 11, color: 'var(--c500)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 2, background: 'var(--c500)', display: 'inline-block', borderRadius: 1 }} />
                     Con plan adelantado
                   </span>
                 )}
               </div>
               {hasPlan && (
-                <p className="text-xs text-green-600 dark:text-green-400 mb-2">
-                  Con los pagos adelantados terminas {fmt.date(proj.payoffDate)} en lugar de {fmt.date(detail.projectionBase?.payoffDate)} — ahorras {fmt.currency((detail.projectionBase?.totalInterest || 0) - (proj.totalInterest || 0), currency)} en intereses
+                <p style={{ fontSize: 11, color: 'var(--c500)', marginBottom: 8 }}>
+                  Con los pagos adelantados terminas {fmt.date(proj.payoffDate)} — ahorras {fmt.currency((detail.projectionBase?.totalInterest || 0) - (proj.totalInterest || 0), currency)} en intereses
                 </p>
               )}
-              <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart
-                  data={scheduleData}
-                  margin={{ top: 4, right: 40, left: -20, bottom: 0 }}
-                  barSize={scheduleData.length > 24 ? 4 : 8}
-                >
+              <ResponsiveContainer width="100%" height={200}>
+                <ComposedChart data={scheduleData} margin={{ top: 4, right: 40, left: -20, bottom: 0 }} barSize={scheduleData.length > 24 ? 4 : 8}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} interval={xInterval} />
                   <YAxis yAxisId="bars" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
@@ -202,54 +235,52 @@ function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
                   <Tooltip content={<ChartTooltip currency={currency} />} />
                   <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
                     formatter={(value) => <span style={{ color: 'var(--text-muted)' }}>{value}</span>} />
-                  <Bar yAxisId="bars" dataKey="interest"  name="Interés" stackId="p" fill="#f43f5e" radius={[0,0,0,0]} />
-                  <Bar yAxisId="bars" dataKey="principal" name="Capital" stackId="p" fill="#22c55e" radius={[2,2,0,0]} />
+                  <Bar yAxisId="bars" dataKey="interest"  name="Interés" stackId="p" fill="#e53e3e" radius={[0,0,0,0]} />
+                  <Bar yAxisId="bars" dataKey="principal" name="Capital" stackId="p" fill="var(--c500)" radius={[2,2,0,0]} />
                   <Line yAxisId="line" type="monotone" dataKey="balance" name="Saldo" stroke="#0ea5e9" strokeWidth={2} dot={false} />
                   {hasPlan && scheduleDataBase.length > 0 && (
-                    <Line yAxisId="line" type="monotone" data={scheduleDataBase} dataKey="balance" name="Saldo sin plan" stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
+                    <Line yAxisId="line" type="monotone" data={scheduleDataBase} dataKey="balance" name="Saldo sin plan" stroke="var(--text-muted)" strokeWidth={1.5} dot={false} strokeDasharray="5 3" />
                   )}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {/* ── Pagos adelantados planificados ── */}
+          {/* Planned payments */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-semibold">Pagos adelantados planificados</h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <h4 style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '.08em' }}>Pagos adelantados</h4>
               {!showPlannedForm && (
-                <button onClick={() => setShowPlannedForm(true)}
-                  className="flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium">
-                  <CalendarPlus size={13} /> Agregar
+                <button
+                  onClick={() => setShowPlannedForm(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--c500)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  <CalendarPlus size={12} /> Agregar
                 </button>
               )}
             </div>
 
             {showPlannedForm && (
-              <form onSubmit={savePlanned} className="p-3 rounded-lg border border-brand-400 bg-brand-500/5 mb-3 space-y-2 animate-scale-in">
+              <form onSubmit={savePlanned} style={{ padding: 12, borderRadius: 10, border: '1px solid var(--c500)', background: 'rgba(0,184,148,.05)', marginBottom: 10 }} className="space-y-2 animate-scale-in">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="label">Fecha</label>
-                    <input className="input" type="date" required
-                      value={plannedForm.planned_date}
-                      min={localDate()}
+                    <input className="input" type="date" required value={plannedForm.planned_date} min={localDate()}
                       onChange={e => setPlannedForm({ ...plannedForm, planned_date: e.target.value })} />
                   </div>
                   <div>
                     <label className="label">Monto extra a capital</label>
                     <input className="input" type="number" step="0.01" min="1" placeholder="0.00" required
-                      value={plannedForm.amount}
-                      onChange={e => setPlannedForm({ ...plannedForm, amount: e.target.value })} />
+                      value={plannedForm.amount} onChange={e => setPlannedForm({ ...plannedForm, amount: e.target.value })} />
                   </div>
                 </div>
                 <div>
                   <label className="label">Nota (opcional)</label>
                   <input className="input" type="text" placeholder="Ej: Aguinaldo, bono"
-                    value={plannedForm.notes}
-                    onChange={e => setPlannedForm({ ...plannedForm, notes: e.target.value })} />
+                    value={plannedForm.notes} onChange={e => setPlannedForm({ ...plannedForm, notes: e.target.value })} />
                 </div>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setShowPlannedForm(false)} className="btn-ghost text-xs flex-1 justify-center">Cancelar</button>
+                  <button type="button" onClick={() => setShowPlannedForm(false)} className="btn-secondary text-xs flex-1 justify-center">Cancelar</button>
                   <button type="submit" disabled={plannedBusy} className="btn-primary text-xs flex-1 justify-center">
                     {plannedBusy ? 'Guardando...' : 'Guardar'}
                   </button>
@@ -258,53 +289,53 @@ function DebtCard({ debt, currency, onEdit, onDelete, onPay }) {
             )}
 
             {detail.planned?.length > 0 ? (
-              <div className="space-y-1.5">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {detail.planned.map(p => (
-                  <div key={p.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-surface-50 dark:bg-surface-800 border border-[var(--border)]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CalendarPlus size={13} className="text-brand-500 flex-shrink-0" />
-                      <span className="text-xs font-medium">{fmt.date(p.planned_date)}</span>
-                      {p.notes && <span className="text-xs text-[var(--text-muted)] truncate">· {p.notes}</span>}
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <CalendarPlus size={12} style={{ color: 'var(--c500)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>{fmt.date(p.planned_date)}</span>
+                      {p.notes && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· {p.notes}</span>}
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-xs font-semibold text-mono text-green-600">{fmt.currency(p.amount, currency)}</span>
-                      <button onClick={() => deletePlanned(p.id)} className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20">
-                        <X size={12} className="text-rose-400" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--c500)', fontFamily: 'var(--fm)' }}>{fmt.currency(p.amount, currency)}</span>
+                      <button onClick={() => deletePlanned(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', padding: 2 }}>
+                        <X size={12} />
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
             ) : !showPlannedForm && (
-              <p className="text-xs text-[var(--text-muted)]">Sin pagos adelantados planificados. Agregar uno actualiza la proyección automáticamente.</p>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sin pagos adelantados. Agregar uno actualiza la proyección automáticamente.</p>
             )}
           </div>
 
-          {/* ── Historial de pagos ── */}
+          {/* Payment history */}
           {detail.payments?.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold mb-2">Historial de pagos</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+              <h4 style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Historial de pagos</h4>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr className="text-[var(--text-muted)] border-b border-[var(--border)]">
-                      <th className="text-left py-1.5">Fecha</th>
-                      <th className="text-right py-1.5">Total</th>
-                      <th className="text-right py-1.5">Capital</th>
-                      <th className="text-right py-1.5">Interés</th>
-                      <th className="text-right py-1.5">Extra</th>
-                      <th className="text-right py-1.5">Saldo</th>
+                    <tr style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'left', paddingBottom: 6 }}>Fecha</th>
+                      <th style={{ textAlign: 'right', paddingBottom: 6 }}>Total</th>
+                      <th style={{ textAlign: 'right', paddingBottom: 6 }}>Capital</th>
+                      <th style={{ textAlign: 'right', paddingBottom: 6 }}>Interés</th>
+                      <th style={{ textAlign: 'right', paddingBottom: 6 }}>Extra</th>
+                      <th style={{ textAlign: 'right', paddingBottom: 6 }}>Saldo</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--border)]">
+                  <tbody>
                     {detail.payments.map((p) => (
-                      <tr key={p.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50">
-                        <td className="py-1.5">{fmt.date(p.payment_date)}</td>
-                        <td className="text-right font-medium">{fmt.currency(p.total_amount, currency)}</td>
-                        <td className="text-right text-green-600">{fmt.currency(p.principal_paid, currency)}</td>
-                        <td className="text-right text-rose-500">{fmt.currency(p.interest_paid, currency)}</td>
-                        <td className="text-right text-brand-500">{p.extra_principal > 0 ? fmt.currency(p.extra_principal, currency) : '—'}</td>
-                        <td className="text-right text-mono">{fmt.currency(p.balance_after, currency)}</td>
+                      <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '6px 0', color: 'var(--text)' }}>{fmt.date(p.payment_date)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 500, fontFamily: 'var(--fm)' }}>{fmt.currency(p.total_amount, currency)}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--c500)', fontFamily: 'var(--fm)' }}>{fmt.currency(p.principal_paid, currency)}</td>
+                        <td style={{ textAlign: 'right', color: '#e53e3e', fontFamily: 'var(--fm)' }}>{fmt.currency(p.interest_paid, currency)}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--c500)', fontFamily: 'var(--fm)' }}>{p.extra_principal > 0 ? fmt.currency(p.extra_principal, currency) : '—'}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--fm)', color: 'var(--text)' }}>{fmt.currency(p.balance_after, currency)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -331,8 +362,8 @@ export default function Debts() {
   const [deleting,     setDeleting]     = useState(null);
   const [payDebt,      setPayDebt]      = useState(null);
   const [form,         setForm]         = useState(EMPTY_DEBT);
-  const [payForm, setPayForm] = useState(EMPTY_PAY);
-  const [busy, setBusy] = useState(false);
+  const [payForm,      setPayForm]      = useState(EMPTY_PAY);
+  const [busy,         setBusy]         = useState(false);
 
   useEffect(() => { fetchDebts(); fetchCreditCards(); }, []);
 
@@ -370,10 +401,8 @@ export default function Debts() {
       else await createDebt(payload);
       setModal(false); fetchDebts();
     } catch (err) {
-      if (err.response?.status === 403) {
-        setModal(false);
-        setUpgradeModal(true);
-      } else { throw err; }
+      if (err.response?.status === 403) { setModal(false); setUpgradeModal(true); }
+      else throw err;
     } finally { setBusy(false); }
   };
 
@@ -390,60 +419,117 @@ export default function Debts() {
     setDeleting(null); fetchDebts();
   };
 
-  const totalDebt = debts.reduce((s, d) => s + (d.current_balance || 0), 0);
+  const totalDebt    = debts.reduce((s, d) => s + (d.current_balance || 0), 0);
   const totalMonthly = debts.reduce((s, d) => s + (d.is_active ? d.monthly_payment : 0), 0);
+  const activeDebts  = debts.filter(d => d.is_active);
+
+  // Sort by annual_rate descending (avalanche strategy: highest rate first = FOCO)
+  const sortedDebts  = [...debts].sort((a, b) => (b.annual_rate || 0) - (a.annual_rate || 0));
+
+  const amountInt = Math.floor(totalDebt).toLocaleString();
+  const amountDec = (totalDebt % 1).toFixed(2).slice(2);
+
+  // Longest payoff date across all debts
+  const latestPayoff = debts
+    .map(d => d.projection?.payoffDate)
+    .filter(Boolean)
+    .sort()
+    .pop();
 
   return (
-    <div className="space-y-5 animate-fade-up">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-display font-bold text-xl">Deudas</h1>
-          <p className="text-[var(--text-muted)] text-sm">
-            {debts.length} deuda{debts.length !== 1 ? 's' : ''} registrada{debts.length !== 1 ? 's' : ''}
-          </p>
+    <div className="space-y-4 animate-fade-up" style={{ maxWidth: 640, margin: '0 auto' }}>
+
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div style={{
+        padding: '6px 4px 4px',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <div style={{
+          fontFamily: 'var(--fd)', fontSize: 32, fontWeight: 300,
+          color: 'var(--text)', lineHeight: 1, letterSpacing: '-.01em',
+        }}>
+          Deudas
         </div>
-        <button onClick={openCreate} className="btn-primary"><Plus size={15} /> Nueva deuda</button>
+        <button
+          onClick={openCreate}
+          aria-label="Nueva deuda"
+          style={{
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'var(--c500)', color: '#0b1712',
+            border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <Plus size={20} />
+        </button>
       </div>
 
-      {debts.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="card">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Deuda total</p>
-            <p className="text-display font-bold text-xl text-mono text-rose-500">{fmt.currency(totalDebt, currency)}</p>
-          </div>
-          <div className="card">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Pago mensual total</p>
-            <p className="text-display font-bold text-xl text-mono">{fmt.currency(totalMonthly, currency)}</p>
-          </div>
-          <div className="card hidden sm:block">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Número de deudas</p>
-            <p className="text-display font-bold text-xl">{debts.filter(d => d.is_active).length} activas</p>
-          </div>
+      {/* ── Hero (dark m-hero) ──────────────────────────────────── */}
+      <div className="m-hero">
+        <div className="m-hero-label">
+          <span>Deuda total</span>
+          <span style={{ color: 'var(--c400)', fontSize: 10 }}>
+            {activeDebts.length} deuda{activeDebts.length !== 1 ? 's' : ''} activa{activeDebts.length !== 1 ? 's' : ''}
+          </span>
         </div>
-      )}
+        <div className="m-hero-amt">
+          <span className="cur">{currency}</span>
+          <span>{amountInt}</span>
+          <span className="cents">.{amountDec}</span>
+        </div>
+        {totalMonthly > 0 && (
+          <div className="m-hero-trend">
+            {fmt.currency(totalMonthly, currency)}/mes
+            {latestPayoff && (
+              <span className="muted">
+                {' '}· libre {fmt.date(latestPayoff)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
+      {/* ── Debt list ───────────────────────────────────────────── */}
       {debtsLoading ? <Spinner /> : debts.length === 0 ? (
         <Empty icon={CreditCard} title="Sin deudas registradas"
           description="Agrega tus deudas para ver proyecciones de payoff y ahorro en intereses"
           action={<button onClick={openCreate} className="btn-primary text-xs">+ Nueva deuda</button>} />
       ) : (
-        <div className="grid lg:grid-cols-2 gap-4">
-          {debts.map((d) => (
-            <DebtCard key={d.id} debt={d} currency={currency}
-              onEdit={openEdit} onDelete={setDeleting} onPay={openPay} />
+        <div className="m-sect">
+          <div className="m-sect-head">
+            <div className="m-sect-title">Estrategia · Avalancha</div>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>mayor tasa primero</span>
+          </div>
+          {sortedDebts.map((d, i) => (
+            <DebtRow
+              key={d.id}
+              debt={d}
+              currency={currency}
+              index={i}
+              isLast={i === sortedDebts.length - 1}
+              onEdit={openEdit}
+              onDelete={setDeleting}
+              onPay={openPay}
+            />
           ))}
         </div>
       )}
 
       <UpgradeModal open={upgradeModal} onClose={() => setUpgradeModal(false)} feature="debts" />
 
-      {/* Modal crear/editar */}
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar deuda' : 'Nueva deuda'}>
+      {/* ── Create/Edit Modal ─────────────────────────────────────── */}
+      <Modal
+        open={modal}
+        onClose={() => setModal(false)}
+        eyebrow={editing ? 'Editar deuda' : 'Nueva deuda'}
+        title="Registra una deuda"
+      >
         <form onSubmit={save} className="space-y-4">
           <div>
             <label className="label">Nombre de la deuda</label>
             <input className="input" type="text" placeholder="Ej: Tarjeta Visa, Préstamo personal"
-              value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+              value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required autoFocus />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -486,11 +572,6 @@ export default function Debts() {
                 <option key={c.id} value={c.id}>{c.name} ••{c.last_four}</option>
               ))}
             </select>
-            {form.credit_card_id && (
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                El saldo pendiente de esta deuda reducirá el crédito disponible de la tarjeta.
-              </p>
-            )}
           </div>
 
           <div>
@@ -500,7 +581,7 @@ export default function Debts() {
           </div>
 
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={() => setModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+            <button type="button" onClick={() => setModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center">
               {busy ? 'Guardando...' : editing ? 'Actualizar' : 'Guardar'}
             </button>
@@ -508,13 +589,18 @@ export default function Debts() {
         </form>
       </Modal>
 
-      {/* Modal pago */}
-      <Modal open={payModal} onClose={() => setPayModal(false)} title={`Registrar pago – ${payDebt?.name}`}>
+      {/* ── Pay Modal ────────────────────────────────────────────── */}
+      <Modal
+        open={payModal}
+        onClose={() => setPayModal(false)}
+        eyebrow="Registrar pago"
+        title={payDebt?.name || ''}
+      >
         <form onSubmit={savePay} className="space-y-4">
-          <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-800 text-xs">
-            Saldo actual: <strong className="text-rose-500 text-mono">{fmt.currency(payDebt?.current_balance, currency)}</strong>
+          <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)', fontSize: 12 }}>
+            Saldo actual: <strong style={{ color: '#e53e3e', fontFamily: 'var(--fm)' }}>{fmt.currency(payDebt?.current_balance, currency)}</strong>
             {payDebt?.payment_day && (
-              <span className="ml-3 text-[var(--text-muted)]">· Vence día {payDebt.payment_day} de cada mes</span>
+              <span style={{ marginLeft: 10, color: 'var(--text-muted)' }}>· vence día {payDebt.payment_day}</span>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -533,7 +619,7 @@ export default function Debts() {
             <label className="label">Abono extra a capital (opcional)</label>
             <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
               value={payForm.extra_principal} onChange={e => setPayForm({ ...payForm, extra_principal: e.target.value })} />
-            <p className="text-xs text-[var(--text-muted)] mt-1">Un abono extra reduce directamente el capital y los intereses futuros</p>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>Un abono extra reduce directamente el capital y los intereses futuros</p>
           </div>
           <div>
             <label className="label">Notas (opcional)</label>
@@ -541,7 +627,7 @@ export default function Debts() {
               value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} />
           </div>
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={() => setPayModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+            <button type="button" onClick={() => setPayModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center">
               {busy ? 'Registrando...' : 'Registrar pago'}
             </button>

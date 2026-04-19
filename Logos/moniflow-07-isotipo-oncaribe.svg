@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MoniFlow — Isotipo 07
+  Variación: Solo símbolo sobre fondo Agua Caribe
+  Uso: Botones CTA, chips, elementos sobre fondo #00b894
+  Fondo recomendado: #00b894
+  Tamaño mínimo: 32px
+  viewBox: 100×100 — CUADRADO PERFECTO 1:1
+-->
+<svg width="100" height="100"
+     viewBox="0 0 100 100"
+     xmlns="http://www.w3.org/2000/svg"
+     role="img"
+     aria-label="MoniFlow">
+  <title>MoniFlow — símbolo sobre Caribe</title>
+  <desc>MoniFlow isotipo oscuro para uso sobre fondo Agua Caribe #00b894</desc>
+  <rect x="0"  y="0" width="20" height="100" fill="#0b1712"/>
+  <polygon points="20,0 40,0 50,52 30,52" fill="#0b1712"/>
+  <polygon points="60,0 80,0 70,52 50,52" fill="#0b1712"/>
+  <rect x="80" y="0" width="20" height="100" fill="#0b1712"/>
+  <rect x="32" y="72" width="11" height="28" rx="1.5" fill="#152a1e"/>
+  <rect x="44" y="56" width="13" height="44" rx="1.5" fill="#152a1e"/>
+  <rect x="58" y="72" width="11" height="28" rx="1.5" fill="#152a1e"/>
+</svg>

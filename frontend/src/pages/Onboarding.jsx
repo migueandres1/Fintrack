@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  TrendingUp, LayoutDashboard, ArrowLeftRight, Wallet,
-  PiggyBank, Calendar, CreditCard, Check, ChevronRight,
-  ChevronLeft, Plus, Landmark, BarChart2,
+  Check, ChevronLeft, Plus,
   Crown, Users, Zap, ArrowRight,
 } from 'lucide-react';
 import { useStore } from '../store/index.js';
@@ -35,16 +33,49 @@ function Hint({ children }) {
   return <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">{children}</p>;
 }
 
-// ── Back button ────────────────────────────────────────────────────────────
-function BackBtn({ onPrev }) {
+// ── Step header with progress bar segments (matches handoff OnbSetup) ──────
+function StepHeader({ step, totalSteps, onPrev, onSkip, eyebrow, title, description }) {
   return (
-    <button
-      type="button"
-      onClick={onPrev}
-      className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] mb-4 transition-colors"
-    >
-      <ChevronLeft size={14} /> Paso anterior
-    </button>
+    <>
+      <div className="onb-step-head">
+        <button
+          type="button"
+          onClick={onPrev}
+          aria-label="Volver"
+          style={{
+            width: 36, height: 36, borderRadius: 10, border: 'none',
+            background: 'var(--surface-2)', color: 'var(--text)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <div className="onb-progress">
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div key={i} className={`seg ${i < step ? 'done' : ''}`} />
+          ))}
+        </div>
+        {onSkip ? (
+          <button
+            type="button"
+            onClick={onSkip}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 12, color: 'var(--text-muted)', fontWeight: 500,
+              padding: '4px 6px', flexShrink: 0,
+            }}
+          >
+            Saltar
+          </button>
+        ) : <div style={{ width: 48 }} />}
+      </div>
+      <div>
+        <div className="onb-step-eyebrow">{eyebrow}</div>
+        <h1 className="onb-step-title" dangerouslySetInnerHTML={{ __html: title }} />
+        {description && <p className="onb-step-desc">{description}</p>}
+      </div>
+    </>
   );
 }
 
@@ -52,55 +83,116 @@ function BackBtn({ onPrev }) {
 function AddedList({ items }) {
   if (!items.length) return null;
   return (
-    <ul className="flex flex-col gap-1">
+    <ul style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '14px 0' }}>
       {items.map((item) => (
-        <li key={item.id} className="flex items-center gap-2 text-sm p-2 rounded-xl bg-[var(--surface-2)]">
-          <Check size={14} className="text-emerald-500 shrink-0" />
-          <span className="flex-1 text-[var(--text)]">{item._label}</span>
-          <span className="text-[var(--text-muted)] text-xs">{item._sublabel}</span>
+        <li key={item.id} style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 12px', borderRadius: 10,
+          background: 'rgba(0,184,148,.08)', border: '1px solid rgba(0,184,148,.2)',
+        }}>
+          <div style={{
+            width: 22, height: 22, borderRadius: '50%',
+            background: 'var(--c500)', color: '#0b1712',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <Check size={13} strokeWidth={3} />
+          </div>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{item._label}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--fm)' }}>{item._sublabel}</span>
         </li>
       ))}
     </ul>
   );
 }
 
-// ── Step 0: Bienvenida ─────────────────────────────────────────────────────
+// ── Step 0: Bienvenida (splash oscuro con topo — estilo OnbWelcome) ───────
 function StepWelcome({ onNext }) {
-  const features = [
-    { icon: <LayoutDashboard size={18} />, title: 'Dashboard', desc: 'Score financiero, balance y resumen en tiempo real.' },
-    { icon: <ArrowLeftRight size={18} />, title: 'Transacciones', desc: 'Registra gastos e ingresos; escanea recibos con OCR.' },
-    { icon: <Landmark size={18} />,       title: 'Cuentas bancarias', desc: 'Controla el saldo de cada cuenta y tarjeta de débito.' },
-    { icon: <BarChart2 size={18} />,      title: 'Presupuesto', desc: 'Establece límites de gasto por categoría cada mes.' },
-    { icon: <Wallet size={18} />,         title: 'Deudas', desc: 'Proyecta pagos y visualiza cuándo estarás libre de deudas.' },
-    { icon: <PiggyBank size={18} />,      title: 'Metas de ahorro', desc: 'Define objetivos y sigue tu progreso semana a semana.' },
-    { icon: <CreditCard size={18} />,     title: 'Tarjetas de crédito', desc: 'Controla límites, fechas de corte y simula pagos mínimos.' },
-    { icon: <Calendar size={18} />,       title: 'Recurrentes', desc: 'Automatiza ingresos y gastos periódicos.' },
-  ];
   return (
-    <div className="flex flex-col items-center text-center gap-6">
-      <div className="w-16 h-16 rounded-3xl bg-brand-500 flex items-center justify-center">
-        <TrendingUp size={32} className="text-white" />
+    <div className="onb-splash">
+      <div className="onb-tag">MoniFlow · Finanzas con calma</div>
+
+      {/* Logo isotipo */}
+      <div style={{ marginBottom: 16 }}>
+        <img src="/iso-caribe.svg" alt="MoniFlow" style={{ width: 56, height: 56 }} />
       </div>
-      <div>
-        <h1 className="text-display font-bold text-2xl">Bienvenido a MoniFlow</h1>
-        <p className="text-[var(--text-muted)] mt-1 text-sm">
-          Tu asistente de finanzas personales — configuremos tu cuenta en 6 pasos rápidos.
-        </p>
-      </div>
-      <div className="w-full grid grid-cols-1 gap-2 text-left">
-        {features.map((f) => (
-          <div key={f.title} className="flex items-start gap-3 p-3 rounded-xl bg-[var(--surface-2)]">
-            <span className="text-brand-500 mt-0.5 shrink-0">{f.icon}</span>
-            <div>
-              <p className="text-sm font-medium text-[var(--text)]">{f.title}</p>
-              <p className="text-xs text-[var(--text-muted)]">{f.desc}</p>
+
+      <h1 className="onb-title">Tu dinero,<br />con <em>claridad</em><br />tropical.</h1>
+      <div className="onb-sub">Controla, ahorra y planea — todo en un flujo natural.</div>
+
+      {/* Tarjetas decorativas rotadas (mock) */}
+      <div className="onb-illu">
+        <div style={{ width: '100%', maxWidth: 280, position: 'relative', height: 240, margin: '0 auto' }}>
+          {/* Card 1 — caribe */}
+          <div style={{
+            position: 'absolute', top: 0, left: 20, right: 20,
+            transform: 'rotate(-4deg)',
+            background: 'linear-gradient(135deg, var(--c500) 0%, var(--cdark) 100%)',
+            borderRadius: 14, padding: 18, color: '#0b1712',
+            boxShadow: '0 20px 40px rgba(0,0,0,.4)', aspectRatio: 1.586,
+            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: 'var(--fb)', fontSize: 12, fontWeight: 600 }}>MoniFlow</span>
+              <div style={{ width: 26, height: 18, borderRadius: 3, background: 'rgba(11,23,18,.25)' }} />
+            </div>
+            <div style={{ fontFamily: 'var(--fm)', fontSize: 14, letterSpacing: '.1em' }}>•••• 4729</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, letterSpacing: '.08em' }}>
+              <div>
+                <div style={{ opacity: .55, textTransform: 'uppercase', marginBottom: 2 }}>Titular</div>
+                <div style={{ fontWeight: 700, fontSize: 9 }}>{'SOFÍA R.'}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ opacity: .55, textTransform: 'uppercase', marginBottom: 2 }}>Vence</div>
+                <div style={{ fontWeight: 700, fontSize: 9 }}>04/29</div>
+              </div>
             </div>
           </div>
-        ))}
+          {/* Card 2 — dark */}
+          <div style={{
+            position: 'absolute', top: 60, left: 30, right: 30,
+            transform: 'rotate(3deg)',
+            background: 'linear-gradient(135deg, var(--g950) 0%, var(--g800) 100%)',
+            borderRadius: 14, padding: 18, color: '#f0f5f3',
+            boxShadow: '0 20px 40px rgba(0,0,0,.5)', aspectRatio: 1.586,
+            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: 'var(--fb)', fontSize: 12, fontWeight: 600 }}>MoniFlow</span>
+              <div style={{ width: 26, height: 18, borderRadius: 3, background: 'rgba(240,245,243,.15)' }} />
+            </div>
+            <div style={{ fontFamily: 'var(--fm)', fontSize: 14, letterSpacing: '.1em' }}>•••• 1284</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, letterSpacing: '.08em' }}>
+              <div>
+                <div style={{ opacity: .55, textTransform: 'uppercase', marginBottom: 2 }}>Titular</div>
+                <div style={{ fontWeight: 700, fontSize: 9 }}>{'SOFÍA R.'}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ opacity: .55, textTransform: 'uppercase', marginBottom: 2 }}>Vence</div>
+                <div style={{ fontWeight: 700, fontSize: 9 }}>08/28</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <button onClick={onNext} className="btn-primary w-full justify-center py-2.5">
-        Comenzar configuración <ChevronRight size={16} />
-      </button>
+
+      {/* Progress dots */}
+      <div className="onb-dots">
+        <span className="d active" />
+        <span className="d" />
+        <span className="d" />
+      </div>
+
+      <div className="onb-cta">
+        <button
+          onClick={onNext}
+          className="btn-primary justify-center"
+          style={{ padding: '14px 0', fontSize: 15, width: '100%' }}
+        >
+          Crear mi cuenta <ArrowRight size={16} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -124,39 +216,40 @@ function StepProfile({ user, onNext, onPrev }) {
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
-      <BackBtn onPrev={onPrev} />
-      <div>
-        <h2 className="text-display font-bold text-lg">Tu perfil</h2>
-        <p className="text-[var(--text-muted)] text-sm mt-1">
-          Empecemos con lo básico: cómo te llamamos y en qué moneda llevas tus finanzas.
-        </p>
-      </div>
-      <div>
-        <label className="label">Nombre</label>
-        <input
-          className="input"
-          placeholder="Tu nombre o apodo"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          required
-        />
-        <Hint>Así te saludaremos dentro de la app. Puede ser tu nombre completo o solo el primero.</Hint>
-      </div>
-      <div>
-        <label className="label">Moneda principal</label>
-        <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
-          {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <Hint>
-          Todos los montos se mostrarán en esta moneda. Elige la moneda en la que recibes tu ingreso
-          principal (p. ej. USD si cobras en dólares, GTQ si cobras en quetzales).
-        </Hint>
-      </div>
-      <button type="submit" disabled={busy} className="btn-primary w-full justify-center py-2.5">
-        {busy ? 'Guardando...' : <>Siguiente <ChevronRight size={15} /></>}
-      </button>
-    </form>
+    <>
+      <StepHeader
+        step={1} totalSteps={6} onPrev={onPrev}
+        eyebrow="Paso 1 de 6"
+        title="¿Cómo te <em>llamamos</em>?"
+        description="Empecemos con lo básico: tu nombre y la moneda en la que llevas tus finanzas."
+      />
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <label className="label">Nombre</label>
+          <input
+            className="input"
+            placeholder="Tu nombre o apodo"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+            autoFocus
+          />
+          <Hint>Así te saludaremos dentro de la app.</Hint>
+        </div>
+        <div>
+          <label className="label">Moneda principal</label>
+          <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
+            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <Hint>Todos los montos se mostrarán en esta moneda. Elige la moneda en la que recibes tu ingreso principal.</Hint>
+        </div>
+        <div style={{ marginTop: 'auto', paddingTop: 20 }}>
+          <button type="submit" disabled={busy} className="btn-primary w-full justify-center" style={{ padding: '14px 0', fontSize: 14 }}>
+            {busy ? 'Guardando…' : <>Continuar <ArrowRight size={15} /></>}
+          </button>
+        </div>
+      </form>
+    </>
   );
 }
 
@@ -190,27 +283,26 @@ function StepAccounts({ onNext, onPrev }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <BackBtn onPrev={onPrev} />
-      <div>
-        <h2 className="text-display font-bold text-lg">Cuentas bancarias</h2>
-        <p className="text-[var(--text-muted)] text-sm mt-1">
-          Registra las cuentas donde tienes dinero hoy. MoniFlow calculará tu balance
-          automáticamente conforme registres transacciones.
-        </p>
-      </div>
+    <>
+      <StepHeader
+        step={2} totalSteps={6} onPrev={onPrev} onSkip={added.length === 0 ? onNext : null}
+        eyebrow="Paso 2 de 6"
+        title="¿Cuántas <em>cuentas</em>&nbsp;quieres conectar?"
+        description="Registra las cuentas donde tienes dinero hoy. Podrás agregar más después."
+      />
 
-      <form onSubmit={add} className="flex flex-col gap-3">
+      <AddedList items={added} />
+
+      <form onSubmit={add} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <label className="label">Nombre de la cuenta</label>
           <input
             className="input"
-            placeholder="Ej: Cuenta Bancolombia, Efectivo, Cuenta nómina"
+            placeholder="Ej: BBVA, Nu, Efectivo"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
-          <Hint>Ponle un nombre que te ayude a identificarla rápidamente, como el banco o su propósito.</Hint>
         </div>
 
         <div>
@@ -225,54 +317,43 @@ function StepAccounts({ onNext, onPrev }) {
           <div>
             <label className="label">Saldo actual</label>
             <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
+              className="input" type="number" min="0" step="0.01" placeholder="0.00"
               value={form.initial_balance}
               onChange={(e) => setForm({ ...form, initial_balance: e.target.value })}
             />
-            <Hint>¿Cuánto hay en esta cuenta hoy? Puedes dejarlo en 0 si no lo sabes.</Hint>
           </div>
           <div>
             <label className="label">Moneda</label>
             <select className="input" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-            <Hint>La moneda en que opera esta cuenta (puede ser diferente a la principal).</Hint>
           </div>
         </div>
         <div>
           <label className="label">Color</label>
           <input
-            type="color"
-            className="input h-10 cursor-pointer"
+            type="color" className="input h-10 cursor-pointer"
             value={form.color}
             onChange={(e) => setForm({ ...form, color: e.target.value })}
           />
-          <Hint>Para distinguirla en el dashboard.</Hint>
         </div>
 
-        <button type="submit" disabled={busy} className="btn-primary justify-center py-2">
-          <Plus size={15} /> {busy ? 'Agregando...' : 'Agregar cuenta'}
+        <button type="submit" disabled={busy} className="btn-secondary justify-center" style={{ padding: '12px 0', fontSize: 13 }}>
+          <Plus size={14} /> {busy ? 'Agregando…' : 'Agregar cuenta'}
         </button>
       </form>
 
-      <AddedList items={added} />
-
-      <div className="flex gap-2 mt-1">
-        {added.length === 0 ? (
-          <button type="button" onClick={onNext} className="flex-1 py-2 rounded-xl border border-[var(--border)] text-[var(--text-muted)] text-sm hover:bg-[var(--surface-2)] transition-colors">
-            Omitir por ahora
-          </button>
-        ) : (
-          <button type="button" onClick={onNext} className="btn-primary flex-1 justify-center py-2.5">
-            Siguiente <ChevronRight size={15} />
-          </button>
-        )}
+      <div style={{ marginTop: 'auto', paddingTop: 20 }}>
+        <button
+          type="button"
+          onClick={onNext}
+          className="btn-primary w-full justify-center"
+          style={{ padding: '14px 0', fontSize: 14 }}
+        >
+          {added.length === 0 ? 'Omitir por ahora' : <>Continuar <ArrowRight size={15} /></>}
+        </button>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -316,88 +397,74 @@ function StepIncome({ onNext, onPrev }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <BackBtn onPrev={onPrev} />
-      <div>
-        <h2 className="text-display font-bold text-lg">Ingresos recurrentes</h2>
-        <p className="text-[var(--text-muted)] text-sm mt-1">
-          Registra los ingresos que recibes de forma periódica. MoniFlow los usará para calcular
-          tu score financiero y proyectar tu balance futuro.
-        </p>
-      </div>
+    <>
+      <StepHeader
+        step={3} totalSteps={6} onPrev={onPrev} onSkip={added.length === 0 ? onNext : null}
+        eyebrow="Paso 3 de 6"
+        title="¿De dónde viene tu <em>dinero</em>?"
+        description="Registra tus ingresos recurrentes. Los usaremos para calcular tu score y proyectar tu balance."
+      />
 
-      <form onSubmit={add} className="flex flex-col gap-3">
+      <AddedList items={added} />
+
+      <form onSubmit={add} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <label className="label">Categoría</label>
+          <select className="input" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Descripción</label>
+          <input
+            className="input"
+            placeholder="Ej: Salario, Freelance, Negocio"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            required
+          />
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="label">Categoría</label>
-            <select className="input" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <Hint>Clasifica el ingreso: Salario, Negocio propio, Remesas, Freelance, etc.</Hint>
-          </div>
-          <div className="col-span-2">
-            <label className="label">Descripción</label>
-            <input
-              className="input"
-              placeholder="Ej: Salario empresa ABC, Renta local"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              required
-            />
-            <Hint>Un nombre corto que identifique la fuente de ingreso.</Hint>
-          </div>
           <div>
             <label className="label">Monto</label>
             <input
-              className="input"
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="0.00"
+              className="input" type="number" min="0.01" step="0.01" placeholder="0.00"
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
               required
             />
-            <Hint>Importe neto que recibes (después de impuestos si aplica).</Hint>
           </div>
           <div>
             <label className="label">Frecuencia</label>
             <select className="input" value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}>
               {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
-            <Hint>¿Cada cuánto lo recibes?</Hint>
-          </div>
-          <div className="col-span-2">
-            <label className="label">Fecha de inicio</label>
-            <input
-              className="input"
-              type="date"
-              value={form.start_date}
-              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-              required
-            />
-            <Hint>Fecha en que comenzaste a recibir este ingreso (o desde cuándo quieres rastrearlo).</Hint>
           </div>
         </div>
-        <button type="submit" disabled={busy} className="btn-primary justify-center py-2">
-          <Plus size={15} /> {busy ? 'Agregando...' : 'Agregar ingreso'}
+        <div>
+          <label className="label">Fecha de inicio</label>
+          <input
+            className="input" type="date"
+            value={form.start_date}
+            onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+            required
+          />
+        </div>
+        <button type="submit" disabled={busy} className="btn-secondary justify-center" style={{ padding: '12px 0', fontSize: 13 }}>
+          <Plus size={14} /> {busy ? 'Agregando…' : 'Agregar ingreso'}
         </button>
       </form>
 
-      <AddedList items={added} />
-
-      <div className="flex gap-2 mt-1">
-        {added.length === 0 ? (
-          <button type="button" onClick={onNext} className="flex-1 py-2 rounded-xl border border-[var(--border)] text-[var(--text-muted)] text-sm hover:bg-[var(--surface-2)] transition-colors">
-            Omitir por ahora
-          </button>
-        ) : (
-          <button type="button" onClick={onNext} className="btn-primary flex-1 justify-center py-2.5">
-            Siguiente <ChevronRight size={15} />
-          </button>
-        )}
+      <div style={{ marginTop: 'auto', paddingTop: 20 }}>
+        <button
+          type="button" onClick={onNext}
+          className="btn-primary w-full justify-center"
+          style={{ padding: '14px 0', fontSize: 14 }}
+        >
+          {added.length === 0 ? 'Omitir por ahora' : <>Continuar <ArrowRight size={15} /></>}
+        </button>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -427,116 +494,89 @@ function StepDebts({ onNext, onPrev }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <BackBtn onPrev={onPrev} />
-      <div>
-        <h2 className="text-display font-bold text-lg">Tus deudas</h2>
-        <p className="text-[var(--text-muted)] text-sm mt-1">
-          Registra préstamos, créditos o cualquier deuda activa. MoniFlow calculará cuándo
-          terminarás de pagarla y cuánto pagas en intereses.
-        </p>
-      </div>
+    <>
+      <StepHeader
+        step={4} totalSteps={6} onPrev={onPrev} onSkip={added.length === 0 ? onNext : null}
+        eyebrow="Paso 4 de 6"
+        title="¿Tienes alguna <em>deuda</em>?"
+        description="Registra préstamos o créditos. Calcularemos cuándo terminarás de pagar y cuánto en intereses."
+      />
 
-      <form onSubmit={add} className="flex flex-col gap-3">
+      <AddedList items={added} />
+
+      <form onSubmit={add} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <label className="label">Nombre de la deuda</label>
+          <input
+            className="input"
+            placeholder="Ej: Préstamo banco, Auto, Hipoteca"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+          />
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="label">Nombre de la deuda</label>
-            <input
-              className="input"
-              placeholder="Ej: Préstamo banco, Auto, Hipoteca"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-            <Hint>Un nombre descriptivo para identificar esta deuda.</Hint>
-          </div>
           <div>
             <label className="label">Saldo actual</label>
             <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
+              className="input" type="number" min="0" step="0.01" placeholder="0.00"
               value={form.initial_balance}
               onChange={(e) => setForm({ ...form, initial_balance: e.target.value })}
               required
             />
-            <Hint>Lo que debes hoy, no el monto original del préstamo.</Hint>
           </div>
           <div>
             <label className="label">Tasa anual (%)</label>
             <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Ej: 18.5"
+              className="input" type="number" min="0" step="0.01" placeholder="18.5"
               value={form.annual_rate}
               onChange={(e) => setForm({ ...form, annual_rate: e.target.value })}
               required
             />
-            <Hint>Tasa de interés anual (aparece en tu contrato o estado de cuenta).</Hint>
           </div>
           <div>
             <label className="label">Pago mensual</label>
             <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
+              className="input" type="number" min="0" step="0.01" placeholder="0.00"
               value={form.monthly_payment}
               onChange={(e) => setForm({ ...form, monthly_payment: e.target.value })}
               required
             />
-            <Hint>Cuánto pagas cada mes normalmente (cuota fija o lo que acostumbras pagar).</Hint>
           </div>
           <div>
             <label className="label">Día de pago</label>
             <input
-              className="input"
-              type="number"
-              min="1"
-              max="31"
-              placeholder="Ej: 5"
+              className="input" type="number" min="1" max="31" placeholder="5"
               value={form.payment_day}
               onChange={(e) => setForm({ ...form, payment_day: e.target.value })}
               required
             />
-            <Hint>Día del mes en que vence tu pago.</Hint>
-          </div>
-          <div className="col-span-2">
-            <label className="label">Fecha de inicio del seguimiento</label>
-            <input
-              className="input"
-              type="date"
-              value={form.start_date}
-              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-              required
-            />
-            <Hint>Desde cuándo quieres que MoniFlow rastree esta deuda (normalmente hoy).</Hint>
           </div>
         </div>
-        <button type="submit" disabled={busy} className="btn-primary justify-center py-2">
-          <Plus size={15} /> {busy ? 'Agregando...' : 'Agregar deuda'}
+        <div>
+          <label className="label">Fecha de inicio</label>
+          <input
+            className="input" type="date"
+            value={form.start_date}
+            onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+            required
+          />
+        </div>
+        <button type="submit" disabled={busy} className="btn-secondary justify-center" style={{ padding: '12px 0', fontSize: 13 }}>
+          <Plus size={14} /> {busy ? 'Agregando…' : 'Agregar deuda'}
         </button>
       </form>
 
-      <AddedList items={added} />
-
-      <div className="flex gap-2 mt-1">
+      <div style={{ marginTop: 'auto', paddingTop: 20 }}>
         <button
-          type="button"
-          onClick={onNext}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-            added.length > 0 ? 'btn-primary justify-center' : 'border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'
-          }`}
+          type="button" onClick={onNext}
+          className="btn-primary w-full justify-center"
+          style={{ padding: '14px 0', fontSize: 14 }}
         >
-          {added.length > 0 ? <>Siguiente <ChevronRight size={15} /></> : 'Omitir por ahora'}
+          {added.length === 0 ? 'Omitir por ahora' : <>Continuar <ArrowRight size={15} /></>}
         </button>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -563,17 +603,17 @@ function StepSavings({ onNext, onPrev }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <BackBtn onPrev={onPrev} />
-      <div>
-        <h2 className="text-display font-bold text-lg">Metas de ahorro</h2>
-        <p className="text-[var(--text-muted)] text-sm mt-1">
-          Define hacia dónde quieres llegar con tus ahorros. MoniFlow te mostrará cuánto
-          ahorrar por semana, quincena o mes para alcanzar cada meta.
-        </p>
-      </div>
+    <>
+      <StepHeader
+        step={5} totalSteps={6} onPrev={onPrev} onSkip={added.length === 0 ? onNext : null}
+        eyebrow="Paso 5 de 6"
+        title="¿Hacia dónde <em>ahorras</em>?"
+        description="Define tus metas. Calcularemos cuánto ahorrar por semana, quincena o mes para lograrlas."
+      />
 
-      <form onSubmit={add} className="flex flex-col gap-3">
+      <AddedList items={added} />
+
+      <form onSubmit={add} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <label className="label">Nombre de la meta</label>
           <input
@@ -583,53 +623,41 @@ function StepSavings({ onNext, onPrev }) {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
-          <Hint>Nómbrala de forma que te motive. Las metas concretas se cumplen más fácil.</Hint>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">Monto objetivo</label>
             <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
+              className="input" type="number" min="0" step="0.01" placeholder="0.00"
               value={form.target_amount}
               onChange={(e) => setForm({ ...form, target_amount: e.target.value })}
               required
             />
-            <Hint>¿Cuánto necesitas ahorrar en total para esta meta?</Hint>
           </div>
           <div>
-            <label className="label">Fecha límite (opcional)</label>
+            <label className="label">Fecha límite</label>
             <input
-              className="input"
-              type="date"
+              className="input" type="date"
               value={form.deadline}
               onChange={(e) => setForm({ ...form, deadline: e.target.value })}
             />
-            <Hint>Si tienes una fecha en mente, MoniFlow calculará cuánto ahorrar por período.</Hint>
           </div>
         </div>
-        <button type="submit" disabled={busy} className="btn-primary justify-center py-2">
-          <Plus size={15} /> {busy ? 'Agregando...' : 'Agregar meta'}
+        <button type="submit" disabled={busy} className="btn-secondary justify-center" style={{ padding: '12px 0', fontSize: 13 }}>
+          <Plus size={14} /> {busy ? 'Agregando…' : 'Agregar meta'}
         </button>
       </form>
 
-      <AddedList items={added} />
-
-      <div className="flex gap-2 mt-1">
+      <div style={{ marginTop: 'auto', paddingTop: 20 }}>
         <button
-          type="button"
-          onClick={onNext}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-            added.length > 0 ? 'btn-primary justify-center' : 'border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'
-          }`}
+          type="button" onClick={onNext}
+          className="btn-primary w-full justify-center"
+          style={{ padding: '14px 0', fontSize: 14 }}
         >
-          {added.length > 0 ? <>Siguiente <ChevronRight size={15} /></> : 'Omitir por ahora'}
+          {added.length === 0 ? 'Omitir por ahora' : <>Continuar <ArrowRight size={15} /></>}
         </button>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -659,117 +687,88 @@ function StepCards({ onNext, onPrev }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <BackBtn onPrev={onPrev} />
-      <div>
-        <h2 className="text-display font-bold text-lg">Tarjetas de crédito</h2>
-        <p className="text-[var(--text-muted)] text-sm mt-1">
-          Opcional — registra tus tarjetas de crédito para controlar su saldo, fecha de corte
-          y simular cuándo las liquidarías pagando solo el mínimo vs. más.
-        </p>
-      </div>
+    <>
+      <StepHeader
+        step={6} totalSteps={6} onPrev={onPrev} onSkip={added.length === 0 ? onNext : null}
+        eyebrow="Paso 6 de 6"
+        title="¿Tienes <em>tarjetas</em> de crédito?"
+        description="Opcional — controla saldos, fechas de corte y simula cuándo las liquidarás."
+      />
 
-      <form onSubmit={add} className="flex flex-col gap-3">
+      <AddedList items={added} />
+
+      <form onSubmit={add} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <label className="label">Nombre / banco</label>
+          <input
+            className="input"
+            placeholder="Ej: Visa Banco Nacional"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+          />
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="label">Nombre / banco</label>
-            <input
-              className="input"
-              placeholder="Ej: Visa Banco Nacional, Mastercard Platinum"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-            <Hint>El nombre del banco o el apodo con el que identificas la tarjeta.</Hint>
-          </div>
           <div>
             <label className="label">Últimos 4 dígitos</label>
             <input
-              className="input"
-              maxLength={4}
-              pattern="\d{4}"
-              placeholder="1234"
+              className="input" maxLength={4} pattern="\d{4}" placeholder="1234"
               value={form.last_four}
               onChange={(e) => setForm({ ...form, last_four: e.target.value })}
               required
             />
-            <Hint>Solo para identificarla; no se almacenan datos completos de la tarjeta.</Hint>
           </div>
           <div>
             <label className="label">Límite de crédito</label>
             <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
+              className="input" type="number" min="0" step="0.01" placeholder="0.00"
               value={form.credit_limit}
               onChange={(e) => setForm({ ...form, credit_limit: e.target.value })}
               required
             />
-            <Hint>El límite máximo autorizado (aparece en tu estado de cuenta o app del banco).</Hint>
           </div>
           <div>
             <label className="label">Día de corte</label>
             <input
-              className="input"
-              type="number"
-              min="1"
-              max="31"
-              placeholder="Ej: 20"
+              className="input" type="number" min="1" max="31" placeholder="20"
               value={form.billing_day}
               onChange={(e) => setForm({ ...form, billing_day: e.target.value })}
               required
             />
-            <Hint>Día del mes en que cierra tu ciclo de facturación.</Hint>
           </div>
           <div>
-            <label className="label">Día límite de pago</label>
+            <label className="label">Día de pago</label>
             <input
-              className="input"
-              type="number"
-              min="1"
-              max="31"
-              placeholder="Ej: 5"
+              className="input" type="number" min="1" max="31" placeholder="5"
               value={form.due_day}
               onChange={(e) => setForm({ ...form, due_day: e.target.value })}
               required
             />
-            <Hint>Día del mes en que vence tu pago para no generar intereses.</Hint>
           </div>
         </div>
         <div>
-          <label className="label">Saldo actual (lo que debes hoy)</label>
+          <label className="label">Saldo actual</label>
           <input
-            className="input"
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
+            className="input" type="number" min="0" step="0.01" placeholder="0.00"
             value={form.initial_balance}
             onChange={(e) => setForm({ ...form, initial_balance: e.target.value })}
           />
-          <Hint>¿Cuánto debes en esta tarjeta en este momento? Deja en 0 si no tienes saldo pendiente.</Hint>
         </div>
-        <button type="submit" disabled={busy} className="btn-primary justify-center py-2">
-          <Plus size={15} /> {busy ? 'Agregando...' : 'Agregar tarjeta'}
+        <button type="submit" disabled={busy} className="btn-secondary justify-center" style={{ padding: '12px 0', fontSize: 13 }}>
+          <Plus size={14} /> {busy ? 'Agregando…' : 'Agregar tarjeta'}
         </button>
       </form>
 
-      <AddedList items={added} />
-
-      <div className="flex gap-2 mt-1">
+      <div style={{ marginTop: 'auto', paddingTop: 20 }}>
         <button
-          type="button"
-          onClick={onNext}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-            added.length > 0 ? 'btn-primary justify-center' : 'border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--surface-2)]'
-          }`}
+          type="button" onClick={onNext}
+          className="btn-primary w-full justify-center"
+          style={{ padding: '14px 0', fontSize: 14 }}
         >
-          {added.length > 0 ? <>Siguiente <ChevronRight size={15} /></> : 'Omitir por ahora'}
+          {added.length === 0 ? 'Omitir por ahora' : <>Continuar <ArrowRight size={15} /></>}
         </button>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -898,42 +897,63 @@ function StepPlan({ onSkip, onPaidSelect, busy }) {
   );
 }
 
-// ── Step 8: ¡Listo! ────────────────────────────────────────────────────────
+// ── Step 8: ¡Listo! (splash con mensaje de completado) ────────────────────
 function StepDone({ onFinish, busy }) {
   return (
-    <div className="flex flex-col items-center text-center gap-6">
-      <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
-        <Check size={40} className="text-emerald-500" />
+    <div className="onb-splash">
+      <div className="onb-tag">Configuración completa</div>
+
+      <div style={{ marginBottom: 16 }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%',
+          background: 'var(--c500)', color: '#0b1712',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Check size={32} strokeWidth={3} />
+        </div>
       </div>
-      <div>
-        <h2 className="text-display font-bold text-2xl">¡Todo listo!</h2>
-        <p className="text-[var(--text-muted)] text-sm mt-2 max-w-xs mx-auto">
-          Tu cuenta está configurada. Puedes editar o agregar más información en cualquier momento
-          desde el menú lateral.
-        </p>
-      </div>
-      <ul className="w-full text-left flex flex-col gap-2">
+
+      <h1 className="onb-title">Todo <em>listo</em>,<br />empecemos a<br />fluir.</h1>
+      <div className="onb-sub">Tu MoniFlow está calibrado. Puedes editar o agregar todo lo que quieras desde el menú.</div>
+
+      <div style={{ flex: 1, margin: '28px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[
           'Registra transacciones y escanea recibos con la cámara',
           'Configura tu presupuesto mensual por categoría',
           'Revisa tu Score Financiero en el dashboard',
         ].map((tip) => (
-          <li key={tip} className="flex items-start gap-2 text-sm p-3 rounded-xl bg-[var(--surface-2)]">
-            <Check size={14} className="text-brand-500 mt-0.5 shrink-0" />
-            <span className="text-[var(--text-muted)]">{tip}</span>
-          </li>
+          <div key={tip} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '12px 14px', borderRadius: 12,
+            background: 'rgba(240,245,243,.05)', border: '1px solid rgba(46,92,62,.4)',
+          }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%',
+              background: 'var(--c500)', color: '#0b1712', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1,
+            }}>
+              <Check size={12} strokeWidth={3} />
+            </div>
+            <span style={{ fontSize: 13, color: 'var(--g300, #a0b5ad)', lineHeight: 1.4 }}>{tip}</span>
+          </div>
         ))}
-      </ul>
-      <button onClick={onFinish} disabled={busy} className="btn-primary w-full justify-center py-2.5">
-        {busy ? 'Cargando...' : 'Ir al dashboard'}
-      </button>
+      </div>
+
+      <div className="onb-cta">
+        <button
+          onClick={onFinish} disabled={busy}
+          className="btn-primary justify-center"
+          style={{ padding: '14px 0', fontSize: 15, width: '100%' }}
+        >
+          {busy ? 'Cargando…' : <>Ir al dashboard <ArrowRight size={16} /></>}
+        </button>
+      </div>
     </div>
   );
 }
 
 // ── Wizard principal ───────────────────────────────────────────────────────
 // Steps: 0=Welcome, 1=Perfil, 2=Cuentas, 3=Ingresos, 4=Deudas, 5=Metas, 6=Tarjetas, 7=Plan, 8=Done
-const STEP_LABELS = ['Perfil', 'Cuentas', 'Ingresos', 'Deudas', 'Metas', 'Tarjetas'];
 
 export default function Onboarding() {
   const user               = useStore((s) => s.user);
@@ -1006,41 +1026,29 @@ export default function Onboarding() {
     }
   };
 
-  const showProgress = step >= 1 && step <= 6;
+  // Steps 0 and 8 use their own full-screen splash layout (dark)
+  const isSplash = step === 0 || step === 8;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-4 py-8">
-      <div className="w-full max-w-md animate-fade-up">
+    <div className="min-h-screen" style={{ background: isSplash ? 'var(--g950)' : 'var(--bg)' }}>
+      <div className="animate-fade-up" style={{
+        width: '100%', maxWidth: 520, margin: '0 auto',
+        minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      }}>
+        {step === 0 && <StepWelcome onNext={next} />}
+        {step === 8 && <StepDone onFinish={finish} busy={busy} />}
 
-        {/* Progress dots */}
-        {showProgress && (
-          <div className="flex items-center justify-center gap-2 mb-6">
-            {STEP_LABELS.map((label, i) => {
-              const dotStep = i + 1;
-              const active  = dotStep === step;
-              const done    = dotStep < step;
-              return (
-                <div key={label} className="flex flex-col items-center gap-1">
-                  <div className={`w-2.5 h-2.5 rounded-full transition-all ${done ? 'bg-emerald-500' : active ? 'bg-brand-500 scale-125' : 'bg-[var(--border)]'}`} />
-                  <span className={`text-[10px] ${active ? 'text-brand-500 font-medium' : 'text-[var(--text-muted)]'}`}>{label}</span>
-                </div>
-              );
-            })}
+        {step >= 1 && step <= 7 && (
+          <div className="onb-step">
+            {step === 1 && <StepProfile  user={user} onNext={goNext} onPrev={prev} />}
+            {step === 2 && <StepAccounts onNext={goNext} onPrev={prev} />}
+            {step === 3 && <StepIncome   onNext={goNext} onPrev={prev} />}
+            {step === 4 && <StepDebts    onNext={goNext} onPrev={prev} />}
+            {step === 5 && <StepSavings  onNext={goNext} onPrev={prev} />}
+            {step === 6 && <StepCards    onNext={goNext} onPrev={prev} />}
+            {step === 7 && <StepPlan     onSkip={handleSkipPlan} onPaidSelect={handlePaidSelect} busy={busy} />}
           </div>
         )}
-
-        <div className="card">
-          {step === 0 && <StepWelcome onNext={next} />}
-          {step === 1 && <StepProfile   user={user} onNext={goNext} onPrev={prev} />}
-          {step === 2 && <StepAccounts  onNext={goNext} onPrev={prev} />}
-          {step === 3 && <StepIncome    onNext={goNext} onPrev={prev} />}
-          {step === 4 && <StepDebts     onNext={goNext} onPrev={prev} />}
-          {step === 5 && <StepSavings   onNext={goNext} onPrev={prev} />}
-          {step === 6 && <StepCards     onNext={goNext} onPrev={prev} />}
-          {step === 7 && <StepPlan      onSkip={handleSkipPlan} onPaidSelect={handlePaidSelect} busy={busy} />}
-          {step === 8 && <StepDone      onFinish={finish} busy={busy} />}
-        </div>
-
       </div>
     </div>
   );

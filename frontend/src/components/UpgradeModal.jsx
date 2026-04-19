@@ -4,11 +4,11 @@
  */
 import { useNavigate } from 'react-router-dom';
 import { Modal } from './ui/index.jsx';
-import { Sparkles, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Sparkles, CheckCircle2, ArrowRight, ScanLine, CreditCard, BarChart3, Zap } from 'lucide-react';
 
 const FEATURE_COPY = {
   ocr: {
-    icon: '📄',
+    Icon: ScanLine,
     title: 'Escaneo de recibos con IA',
     description: 'Fotografiá tu ticket y MoniFlow extrae automáticamente el monto, la fecha y el comercio. Solo disponible en el plan Pro.',
     perks: [
@@ -19,7 +19,7 @@ const FEATURE_COPY = {
     ],
   },
   debts: {
-    icon: '💳',
+    Icon: CreditCard,
     title: 'Gestión de préstamos',
     description: 'Registrá tus deudas, hacé seguimiento de cuotas y mirá tu amortización. Disponible en el plan Pro.',
     perks: [
@@ -30,7 +30,7 @@ const FEATURE_COPY = {
     ],
   },
   planning: {
-    icon: '📊',
+    Icon: BarChart3,
     title: 'Cash flow y planificación',
     description: 'Visualizá tu flujo de caja proyectado, score financiero y calendario de compromisos. Disponible en el plan Pro.',
     perks: [
@@ -41,7 +41,7 @@ const FEATURE_COPY = {
     ],
   },
   limit: {
-    icon: '⚡',
+    Icon: Zap,
     title: 'Límite del plan Free alcanzado',
     description: 'Llegaste al límite de tu plan actual. Pasate a Pro para tener todo sin límites.',
     perks: [
@@ -67,8 +67,8 @@ export default function UpgradeModal({ open, onClose, feature = 'limit' }) {
       <div className="text-center pb-2">
 
         {/* Icono feature */}
-        <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4 text-2xl">
-          {copy.icon}
+        <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4 text-indigo-400">
+          <copy.Icon size={26} />
         </div>
 
         {/* Badge plan */}

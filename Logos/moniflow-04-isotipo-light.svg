@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MoniFlow — Isotipo 04
+  Variación: Solo símbolo sobre fondo blanco o crema
+  Uso: App mobile (nav), favicon, badges, sellos, avatares
+  Fondo recomendado: #ffffff o #f0f5f3
+  Tamaño mínimo: 32px
+  viewBox: 100×100 — CUADRADO PERFECTO 1:1
+-->
+<svg width="100" height="100"
+     viewBox="0 0 100 100"
+     xmlns="http://www.w3.org/2000/svg"
+     role="img"
+     aria-label="MoniFlow">
+  <title>MoniFlow — símbolo</title>
+  <desc>MoniFlow isotipo sobre fondo claro</desc>
+  <!-- Pierna izquierda -->
+  <rect x="0"  y="0" width="20" height="100" fill="#0b1712"/>
+  <!-- Diagonal izquierda: top [20–40], bottom converge a [30–50], para en y=52 -->
+  <polygon points="20,0 40,0 50,52 30,52" fill="#0b1712"/>
+  <!-- Diagonal derecha: espejo exacto -->
+  <polygon points="60,0 80,0 70,52 50,52" fill="#0b1712"/>
+  <!-- Pierna derecha -->
+  <rect x="80" y="0" width="20" height="100" fill="#0b1712"/>
+  <!-- Barras chart — dentro del valle, no tocan piernas ni diagonales -->
+  <rect x="32" y="72" width="11" height="28" rx="1.5" fill="#00b894"/>
+  <rect x="44" y="56" width="13" height="44" rx="1.5" fill="#00b894"/>
+  <rect x="58" y="72" width="11" height="28" rx="1.5" fill="#00b894"/>
+</svg>

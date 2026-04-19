@@ -66,7 +66,18 @@ export async function getDashboard(req, res) {
     const [recent] = await pool.query(
       `SELECT t.*, c.name AS category_name, c.icon, c.color
        FROM transactions t JOIN categories c ON c.id=t.category_id
-       WHERE t.user_id=? ORDER BY t.txn_date DESC LIMIT 5`, [uid]
+       WHERE t.user_id=? ORDER BY t.txn_date DESC LIMIT 8`, [uid]
+    );
+
+    // Top categorías del mes actual
+    const [topCategories] = await pool.query(
+      `SELECT c.id, c.name, c.color, SUM(t.amount) AS total
+       FROM transactions t JOIN categories c ON c.id = t.category_id
+       WHERE t.user_id = ? AND t.type = 'expense'
+         AND (t.credit_card_id IS NULL OR t.is_card_payment = 1)
+         AND DATE_FORMAT(t.txn_date,'%Y-%m') = DATE_FORMAT(NOW(),'%Y-%m')
+       GROUP BY c.id, c.name, c.color
+       ORDER BY total DESC LIMIT 5`, [uid]
     );
 
     // ── Score financiero (0–100 pts, 4 dimensiones × 25 pts) ────────
@@ -155,6 +166,7 @@ export async function getDashboard(req, res) {
       total_debt:     +totalDebt.toFixed(2),
       goals,
       recent_transactions: recent,
+      top_categories: topCategories,
       score,
       budget_pulse,
     });

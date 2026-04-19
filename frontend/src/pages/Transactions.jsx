@@ -1,9 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { Plus, Filter, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine, FileUp, Loader2 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Plus, Download, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, PiggyBank, CreditCard, RefreshCw, Pause, Play, ScanLine, FileUp, Loader2, X, Filter, Wallet, Landmark, Calendar, FileText } from 'lucide-react';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
-import { Modal, Confirm, Spinner, Empty, ProgressBar } from '../components/ui/index.jsx';
+import { Modal, Confirm, Spinner, Empty } from '../components/ui/index.jsx';
 import OcrModal             from '../components/OcrModal.jsx';
 import StatementImportModal from '../components/StatementImportModal.jsx';
 import UpgradeModal         from '../components/UpgradeModal.jsx';
@@ -28,7 +27,25 @@ const EMPTY_REC = {
 };
 
 const FREQ_LABEL = { weekly: 'Semanal', biweekly: 'Quincenal', monthly: 'Mensual', yearly: 'Anual' };
-const FREQ_COLOR = { weekly: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400', biweekly: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400', monthly: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400', yearly: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' };
+
+function groupByDate(transactions) {
+  const groups = {};
+  for (const t of transactions) {
+    const day = String(t.txn_date).split('T')[0];
+    if (!groups[day]) groups[day] = [];
+    groups[day].push(t);
+  }
+  return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+function formatDayHeader(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const today = new Date();
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Hoy';
+  if (d.toDateString() === yesterday.toDateString()) return 'Ayer';
+  return d.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
+}
 
 export default function Transactions() {
   const {
@@ -69,8 +86,7 @@ export default function Transactions() {
   async function handleCameraOcr(file) {
     if (!file) return;
     setOcrScanning(true);
-    const form = new FormData();
-    // Compress large images before upload
+    const formData = new FormData();
     let uploadFile = file;
     if (file.type.startsWith('image/') && file.size > 1.2 * 1024 * 1024) {
       try {
@@ -84,9 +100,9 @@ export default function Transactions() {
         uploadFile = await new Promise(res => canvas.toBlob(b => res(new File([b], 'receipt.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.82));
       } catch { /* use original */ }
     }
-    form.append('receipt', uploadFile);
+    formData.append('receipt', uploadFile);
     try {
-      const { data } = await api.post('/ocr/receipt', form, {
+      const { data } = await api.post('/ocr/receipt', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 60000,
       });
@@ -109,7 +125,7 @@ export default function Transactions() {
         txn_date:    data.date     || f.txn_date,
         category_id: suggestedCat  || f.category_id,
       }));
-    } catch { /* fail silently — user can fill manually */ }
+    } catch { /* fail silently */ }
     finally { setOcrScanning(false); }
   }
 
@@ -206,8 +222,6 @@ export default function Transactions() {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
     const exportUrl = `${baseUrl}/transactions/export?${params}`;
     if (Capacitor.isNativePlatform()) {
-      // En la app nativa adjuntamos el token como query param porque el browser
-      // externo no puede enviar el header Authorization.
       try {
         const stored = JSON.parse(localStorage.getItem('fintrack-store') || '{}');
         const token  = stored?.state?.token || '';
@@ -218,7 +232,6 @@ export default function Transactions() {
     }
   };
 
-  // OCR: pre-fill form with extracted receipt data
   const handleOcrConfirm = ({ description, amount, date, category_id, credit_card_id, account_id }) => {
     setEditing(null);
     setForm({
@@ -235,7 +248,6 @@ export default function Transactions() {
     setModal(true);
   };
 
-  // Recurring handlers
   const openRecurring = () => {
     fetchRecurring();
     fetchCreditCards();
@@ -293,198 +305,564 @@ export default function Transactions() {
     fetchRecurring();
   };
 
-  const chartData = (() => {
-    if (!summary?.monthly) return [];
-    const map = {};
-    summary.monthly.forEach(({ month, type, total }) => {
-      map[month] = map[month] || { month, income: 0, expenses: 0 };
-      if (type === 'income') map[month].income = total;
-      if (type === 'expense') map[month].expenses = total;
-    });
-    return Object.values(map).slice(-6);
-  })();
+  // Summary stats
+  const totalIncome  = summary?.totals?.income  ?? 0;
+  const totalExpense = summary?.totals?.expense  ?? 0;
 
-  const catBreakdown = summary?.byCategory?.filter(c => c.type === 'expense').slice(0, 5) || [];
+  const activeTypeFilter = filters.type;
+  const typeChips = [
+    { key: '', label: `Todos${txnTotal ? ` · ${txnTotal}` : ''}` },
+    { key: 'expense', label: 'Gastos' },
+    { key: 'income',  label: 'Ingresos' },
+    { key: 'transfer', label: 'Transferencias' },
+  ];
+
+  const grouped = groupByDate(transactions);
 
   return (
-    <div className="space-y-5 animate-fade-up">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 animate-fade-up">
+
+      {/* ── Header ───────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <h1 className="text-display font-bold text-xl">Transacciones</h1>
-          <p className="text-[var(--text-muted)] text-sm">{txnTotal} registros</p>
+          <h1 style={{ fontFamily: 'var(--fd)', fontWeight: 300, fontSize: 32, color: 'var(--text)', letterSpacing: '-.02em', lineHeight: 1.1 }}>
+            Transacciones
+          </h1>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            {txnTotal} movimientos
+            {totalExpense > 0 && <> · <span style={{ color: 'var(--text)' }}>{fmt.currency(totalExpense, currency)}</span> gastado</>}
+            {totalIncome > 0  && <> · <span style={{ color: 'var(--c500)' }}>+{fmt.currency(totalIncome, currency)}</span> ingresado</>}
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={exportCsv} className="btn-ghost hidden sm:flex"><Download size={15} /> Exportar</button>
-          <button onClick={openRecurring} className="btn-ghost"><RefreshCw size={15} /><span className="hidden sm:inline">Recurrentes</span></button>
-          <button onClick={() => setShowFilters(!showFilters)} className="btn-ghost"><Filter size={15} /><span className="hidden sm:inline">Filtros</span></button>
-          <button onClick={openOcr} className="btn-ghost" title="Escanear recibo"><ScanLine size={15} /></button>
-          <button onClick={() => { if (effectivePlan === 'free') { setUpgradeModal(true); return; } setStatementModal(true); }} className="btn-ghost" title="Importar estado de cuenta"><FileUp size={15} /></button>
-          <button onClick={openCreate} className="btn-primary"><Plus size={15} /><span className="hidden sm:inline">Nueva</span></button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            className="btn-secondary"
+            style={{ gap: 6, fontSize: 12 }}
+          >
+            <Filter size={13} />
+            <span className="hidden sm:inline">Filtros</span>
+          </button>
+          <button onClick={exportCsv} className="btn-secondary" style={{ fontSize: 12 }}>
+            <Download size={13} />
+            <span className="hidden sm:inline">Exportar</span>
+          </button>
+          <button onClick={openOcr} className="btn-secondary" style={{ fontSize: 12 }}>
+            <ScanLine size={13} />
+            <span className="hidden sm:inline">OCR</span>
+          </button>
+          <button
+            onClick={() => { if (effectivePlan === 'free') { setUpgradeModal(true); return; } setStatementModal(true); }}
+            className="btn-secondary" style={{ fontSize: 12 }}
+            title="Importar estado de cuenta"
+          >
+            <FileUp size={13} />
+          </button>
+          <button onClick={openRecurring} className="btn-secondary" style={{ fontSize: 12 }}>
+            <RefreshCw size={13} />
+          </button>
+          <button onClick={openCreate} className="btn-primary" style={{ fontSize: 13 }}>
+            <Plus size={14} />
+            <span className="hidden sm:inline">Nueva</span>
+          </button>
         </div>
       </div>
 
-      {showFilters && (
-        <div className="card grid grid-cols-2 sm:grid-cols-4 gap-3 animate-scale-in">
-          <div>
-            <label className="label">Tipo</label>
-            <select className="input" value={filters.type} onChange={e => setFilters({ ...filters, type: e.target.value, page: 1 })}>
-              <option value="">Todos</option><option value="income">Ingresos</option><option value="expense">Gastos</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Categoría</label>
-            <select className="input" value={filters.category_id} onChange={e => setFilters({ ...filters, category_id: e.target.value, page: 1 })}>
-              <option value="">Todas</option>
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          {accounts.length > 0 && (
-            <div>
-              <label className="label">Cuenta</label>
-              <select className="input" value={filters.account_id} onChange={e => setFilters({ ...filters, account_id: e.target.value, page: 1 })}>
-                <option value="">Todas</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency || 'USD'})</option>)}
-              </select>
-            </div>
-          )}
-          <div>
-            <label className="label">Desde</label>
-            <input className="input" type="date" value={filters.from} onChange={e => setFilters({ ...filters, from: e.target.value, page: 1 })} />
-          </div>
-          <div>
-            <label className="label">Hasta</label>
-            <input className="input" type="date" value={filters.to} onChange={e => setFilters({ ...filters, to: e.target.value, page: 1 })} />
-          </div>
-          <button onClick={() => setFilters({ type: '', category_id: '', account_id: '', from: '', to: '', page: 1 })}
-            className="btn-ghost text-xs col-span-2 sm:col-span-4 justify-center">Limpiar filtros</button>
-        </div>
-      )}
-
-      {chartData.length > 0 && (
-        <div className="grid lg:grid-cols-3 gap-4">
-          <div className="card lg:col-span-2">
-            <h3 className="text-display font-bold text-sm mb-3">Últimos 6 meses</h3>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={12}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="month" tickFormatter={fmt.monthYear} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v) => fmt.currency(v, currency)} labelFormatter={fmt.monthYear} />
-                <Bar dataKey="income" name="Ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expenses" name="Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="card">
-            <h3 className="text-display font-bold text-sm mb-3">Top gastos por categoría</h3>
-            <div className="space-y-3">
-              {catBreakdown.map((c, i) => (
-                <div key={i}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="font-medium">{c.name}</span>
-                    <span className="text-mono">{fmt.currency(c.total, currency)}</span>
-                  </div>
-                  <ProgressBar value={c.total} max={catBreakdown[0]?.total || 1} color={c.color} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="card p-0 overflow-hidden">
-        {txnLoading ? <Spinner /> : transactions.length === 0 ? (
-          <Empty icon={ArrowUpCircle} title="Sin transacciones" description="Registra tu primera transacción"
-            action={<button onClick={openCreate} className="btn-primary text-xs">+ Nueva transacción</button>} />
-        ) : (
-          <div>
-            <div className="hidden sm:grid grid-cols-5 px-5 py-2 border-b border-[var(--border)] text-xs text-[var(--text-muted)] font-medium">
-              <span className="col-span-2">Descripción</span><span>Categoría</span><span>Fecha</span><span className="text-right">Monto</span>
-            </div>
-            <div className="divide-y divide-[var(--border)]">
-              {transactions.map((t) => {
-                const isTransfer = !!t.linked_transfer_txn_id;
-                const transferAccount = isTransfer ? accounts.find(a => a.id === t.account_id) : null;
-                return (
-                <div key={t.id} className="flex sm:grid sm:grid-cols-5 items-center px-5 py-3 hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors group">
-                  <div className="flex items-center gap-3 col-span-2 flex-1 min-w-0">
-                    <div className={clsx('w-8 h-8 rounded-xl flex items-center justify-center text-xs flex-shrink-0',
-                      isTransfer ? 'bg-brand-500/10 text-brand-500' : '')}
-                      style={!isTransfer ? { background: `${t.color}20`, color: t.color } : {}}>
-                      {isTransfer ? <ArrowLeftRight size={14} /> : t.category_name?.[0]}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium truncate">
-                          {isTransfer
-                            ? (t.description && t.description !== 'Transferencia entre cuentas' ? t.description : (transferAccount ? `${t.type === 'expense' ? '↑' : '↓'} ${transferAccount.name}` : 'Transferencia'))
-                            : (t.description || t.category_name)}
-                        </p>
-                        {isTransfer && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-500 font-medium flex-shrink-0">
-                            Transferencia
-                          </span>
-                        )}
-                        {!isTransfer && t.savings_goal_id && <PiggyBank size={12} className="text-brand-500 flex-shrink-0" title="Reserva para meta de ahorro" />}
-                        {!isTransfer && t.debt_id && <CreditCard size={12} className="text-rose-400 flex-shrink-0" title="Pago de deuda" />}
-                        {!isTransfer && t.credit_card_id && !t.is_card_payment && <CreditCard size={12} className="text-amber-500 flex-shrink-0" title="Cargo a tarjeta de crédito" />}
-                        {!isTransfer && t.is_card_payment && <CreditCard size={12} className="text-green-500 flex-shrink-0" title="Pago de tarjeta" />}
-                      </div>
-                      <p className="text-xs text-[var(--text-muted)] sm:hidden">{fmt.date(t.txn_date)}</p>
-                    </div>
-                  </div>
-                  <span className="hidden sm:block text-xs text-[var(--text-muted)]">
-                    {isTransfer ? 'Transferencia' : t.category_name}
-                  </span>
-                  <span className="hidden sm:block text-xs text-[var(--text-muted)]">{fmt.date(t.txn_date)}</span>
-                  <div className="flex items-center gap-2 ml-auto sm:justify-end">
-                    <span className={clsx('text-sm text-mono font-semibold', t.type === 'income' ? 'text-income' : 'text-expense')}>
-                      {t.type === 'income' ? '+' : '-'}{fmt.currency(t.amount, currency)}
-                    </span>
-                    <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      {!isTransfer && (
-                        <button onClick={() => openEdit(t)} className="p-1 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700">
-                          <Pencil size={13} className="text-[var(--text-muted)]" />
-                        </button>
-                      )}
-                      <button onClick={() => setDeleting(t)} className="p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20">
-                        <Trash2 size={13} className="text-rose-400" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
+      {/* ── Filter chips ──────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {typeChips.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setFilters(f => ({ ...f, type: key, page: 1 }))}
+            style={{
+              padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 600, border: 'none',
+              cursor: 'pointer', transition: 'all .15s',
+              background: activeTypeFilter === key ? 'var(--c500)' : 'var(--surface-2)',
+              color: activeTypeFilter === key ? '#0b1712' : 'var(--text-muted)',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+        {categories.filter(c => c.type === 'expense').slice(0, 4).map(c => (
+          <button
+            key={c.id}
+            onClick={() => setFilters(f => ({ ...f, category_id: String(f.category_id) === String(c.id) ? '' : c.id, page: 1 }))}
+            style={{
+              padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 500, border: 'none',
+              cursor: 'pointer', transition: 'all .15s',
+              background: String(filters.category_id) === String(c.id) ? `${c.color}22` : 'var(--surface-2)',
+              color: String(filters.category_id) === String(c.id) ? c.color : 'var(--text-muted)',
+            }}
+          >
+            {c.name}
+          </button>
+        ))}
+        {(filters.type || filters.category_id || filters.from || filters.to) && (
+          <button
+            onClick={() => setFilters({ type: '', category_id: '', account_id: '', from: '', to: '', page: 1 })}
+            style={{ padding: '6px 10px', borderRadius: 999, fontSize: 11, border: 'none', cursor: 'pointer', background: 'rgba(229,62,62,.08)', color: '#e53e3e', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <X size={11} /> Limpiar
+          </button>
         )}
       </div>
 
-      {txnTotal > 50 && (
-        <div className="flex justify-center gap-2">
-          {filters.page > 1 && <button className="btn-ghost text-xs" onClick={() => setFilters(f => ({ ...f, page: f.page - 1 }))}>← Anterior</button>}
-          <span className="text-xs text-[var(--text-muted)] self-center">Pág. {filters.page}</span>
-          {filters.page * 50 < txnTotal && <button className="btn-ghost text-xs" onClick={() => setFilters(f => ({ ...f, page: f.page + 1 }))}>Siguiente →</button>}
+      {/* ── Advanced filters panel ────────────────────────────── */}
+      {showFilters && (
+        <div className="card" style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+            {accounts.length > 0 && (
+              <div>
+                <label className="label">Cuenta</label>
+                <select className="input" value={filters.account_id} onChange={e => setFilters({ ...filters, account_id: e.target.value, page: 1 })}>
+                  <option value="">Todas</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <label className="label">Desde</label>
+              <input className="input" type="date" value={filters.from} onChange={e => setFilters({ ...filters, from: e.target.value, page: 1 })} />
+            </div>
+            <div>
+              <label className="label">Hasta</label>
+              <input className="input" type="date" value={filters.to} onChange={e => setFilters({ ...filters, to: e.target.value, page: 1 })} />
+            </div>
+          </div>
         </div>
       )}
 
-      {/* ── Modal nueva/editar transacción ── */}
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar transacción' : form.type === 'transfer' ? 'Nueva transferencia' : 'Nueva transacción'}>
+      {/* ── Transaction list ──────────────────────────────────── */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {txnLoading ? (
+          <div style={{ padding: 40 }}><Spinner /></div>
+        ) : transactions.length === 0 ? (
+          <Empty icon={ArrowUpCircle} title="Sin transacciones" description="Registra tu primera transacción"
+            action={<button onClick={openCreate} className="btn-primary" style={{ fontSize: 12 }}>+ Nueva transacción</button>} />
+        ) : (
+          <>
+            {grouped.map(([day, txns], gi) => {
+              const dayNet = txns.reduce((s, t) => {
+                if (t.type === 'income') return s + Number(t.amount);
+                if (t.type === 'expense') return s - Number(t.amount);
+                return s;
+              }, 0);
+              return (
+                <div key={day} style={{ borderBottom: gi < grouped.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  {/* Date group header */}
+                  <div style={{
+                    padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: 'var(--surface-2)', fontSize: 11, fontWeight: 600,
+                    letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-muted)',
+                  }}>
+                    <span>{formatDayHeader(day)}</span>
+                    <span style={{
+                      fontFamily: 'var(--fm)', fontVariantNumeric: 'tabular-nums',
+                      color: dayNet > 0 ? 'var(--c500)' : 'var(--text)',
+                    }}>
+                      {dayNet > 0 ? '+' : dayNet < 0 ? '−' : ''}{fmt.currency(Math.abs(dayNet), currency)}
+                    </span>
+                  </div>
+
+                  {/* Transaction rows */}
+                  {txns.map((t, i) => {
+                    const isTransfer = !!t.linked_transfer_txn_id;
+                    const transferAccount = isTransfer ? accounts.find(a => a.id === t.account_id) : null;
+                    const accountName = accounts.find(a => a.id === t.account_id)?.name || '';
+                    const cardName = creditCards.find(c => c.id === t.credit_card_id)?.name || '';
+                    const displayAccount = cardName || accountName;
+
+                    return (
+                      <div
+                        key={t.id}
+                        style={{
+                          padding: '12px 20px',
+                          display: 'grid',
+                          gridTemplateColumns: 'auto 1fr auto auto auto',
+                          gap: 14,
+                          alignItems: 'center',
+                          borderBottom: i < txns.length - 1 ? '1px solid var(--border)' : 'none',
+                          cursor: 'default',
+                        }}
+                        className="group"
+                      >
+                        {/* Icon tile */}
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
+                          background: isTransfer ? 'rgba(0,184,148,.1)' : `${t.color || '#6a8880'}18`,
+                          color: isTransfer ? 'var(--c500)' : (t.color || '#6a8880'),
+                        }}>
+                          {isTransfer
+                            ? <ArrowLeftRight size={15} />
+                            : (t.category_name?.[0] || '?')}
+                        </div>
+
+                        {/* Description + category */}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
+                              {isTransfer
+                                ? (t.description && t.description !== 'Transferencia entre cuentas'
+                                    ? t.description
+                                    : (transferAccount ? `${t.type === 'expense' ? '↑' : '↓'} ${transferAccount.name}` : 'Transferencia'))
+                                : (t.description || t.category_name)}
+                            </span>
+                            {t.savings_goal_id && !isTransfer && <PiggyBank size={11} style={{ color: 'var(--c500)', flexShrink: 0 }} />}
+                            {t.debt_id && !isTransfer && <CreditCard size={11} style={{ color: '#f43f5e', flexShrink: 0 }} />}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                            {isTransfer ? 'Transferencia' : t.category_name}
+                          </div>
+                        </div>
+
+                        {/* Account name — hidden on mobile */}
+                        <div className="hidden sm:block" style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {displayAccount}
+                        </div>
+
+                        {/* Time */}
+                        <div className="hidden sm:block" style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--fm)', whiteSpace: 'nowrap' }}>
+                          {t.txn_date ? new Date(String(t.txn_date).replace('T', ' ').replace('Z', '')).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
+                        </div>
+
+                        {/* Amount + actions */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            fontSize: 13, fontWeight: 600, fontFamily: 'var(--fm)',
+                            fontVariantNumeric: 'tabular-nums',
+                            color: t.type === 'income' ? 'var(--c500)' : 'var(--text)',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {t.type === 'income' ? '+' : '−'}{fmt.currency(t.amount, currency)}
+                          </span>
+                          <div style={{ display: 'flex', gap: 2 }} className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                            {!isTransfer && (
+                              <button
+                                onClick={() => openEdit(t)}
+                                style={{ padding: '4px 6px', borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)' }}
+                              >
+                                <Pencil size={12} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setDeleting(t)}
+                              style={{ padding: '4px 6px', borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: '#f43f5e' }}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+
+      {/* ── Pagination ────────────────────────────────────────── */}
+      {txnTotal > 50 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}>
+          {filters.page > 1 && (
+            <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setFilters(f => ({ ...f, page: f.page - 1 }))}>← Anterior</button>
+          )}
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pág. {filters.page}</span>
+          {filters.page * 50 < txnTotal && (
+            <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => setFilters(f => ({ ...f, page: f.page + 1 }))}>Siguiente →</button>
+          )}
+        </div>
+      )}
+
+      {/* ── Modal nueva/editar transacción (TxAddSheet style) ──── */}
+      <Modal
+        open={modal}
+        onClose={() => setModal(false)}
+        eyebrow={editing
+          ? 'Editar movimiento'
+          : form.type === 'transfer' ? 'Nueva transferencia'
+          : form.type === 'income'   ? 'Nuevo ingreso'
+          : 'Nuevo gasto'}
+        title={editing ? 'Actualiza los detalles' : 'Registra un movimiento'}
+      >
         <form onSubmit={save} className="space-y-4">
 
-          {/* OCR: scan receipt button (PRO) — only for new transactions */}
-          {!editing && effectivePlan !== 'free' && (
+          {/* ── Amount display ────────────────────────────────────── */}
+          <div className="hero-amount" style={{
+            fontSize: 44, gap: 4, justifyContent: 'center',
+            color: 'var(--text)', marginBottom: 4,
+            borderBottom: '1px solid var(--border)', paddingBottom: 12,
+          }}>
+            <span className="cur">$</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="0"
+              value={form.amount}
+              onChange={e => setForm({ ...form, amount: e.target.value })}
+              required
+              autoFocus={!editing}
+              style={{
+                background: 'transparent', border: 'none', outline: 'none',
+                fontFamily: 'var(--fd)', fontWeight: 300, fontSize: 44,
+                color: 'var(--text)', width: Math.max(80, (String(form.amount || '').length || 1) * 28),
+                textAlign: 'center', padding: 0,
+              }}
+            />
+          </div>
+
+          {/* ── Type toggle ───────────────────────────────────────── */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: accounts.length >= 2 && !editing ? '1fr 1fr 1fr' : '1fr 1fr',
+            gap: 8,
+          }}>
+            {['expense', 'income'].map((tp) => (
+              <button key={tp} type="button"
+                onClick={() => setForm({ ...form, type: tp, category_id: '', debt_id: '', savings_goal_id: '', credit_card_id: '', transfer_from_account_id: '', transfer_to_account_id: '' })}
+                style={{
+                  padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  border: form.type === tp
+                    ? `1.5px solid ${tp === 'income' ? 'var(--c500)' : '#e53e3e'}`
+                    : '1.5px solid var(--border)',
+                  background: form.type === tp
+                    ? tp === 'income' ? 'rgba(0,184,148,.08)' : 'rgba(229,62,62,.08)'
+                    : 'transparent',
+                  color: form.type === tp
+                    ? tp === 'income' ? 'var(--c500)' : '#e53e3e'
+                    : 'var(--text-muted)',
+                }}>
+                {tp === 'income' ? <ArrowUpCircle size={15} /> : <ArrowDownCircle size={15} />}
+                {tp === 'income' ? 'Ingreso' : 'Gasto'}
+              </button>
+            ))}
+            {accounts.length >= 2 && !editing && (
+              <button type="button"
+                onClick={() => setForm({ ...form, type: 'transfer', category_id: '', debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '' })}
+                style={{
+                  padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  border: form.type === 'transfer' ? '1.5px solid var(--c500)' : '1.5px solid var(--border)',
+                  background: form.type === 'transfer' ? 'rgba(0,184,148,.08)' : 'transparent',
+                  color: form.type === 'transfer' ? 'var(--c500)' : 'var(--text-muted)',
+                }}>
+                <ArrowLeftRight size={15} /> Transferir
+              </button>
+            )}
+          </div>
+
+          {/* ── Transfer: from/to account tiles ───────────────────── */}
+          {form.type === 'transfer' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div style={{ padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--bg-card)' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>
+                  Desde
+                </div>
+                <select
+                  value={form.transfer_from_account_id}
+                  onChange={e => setForm({ ...form, transfer_from_account_id: e.target.value })}
+                  required
+                  style={{
+                    width: '100%', background: 'transparent', border: 'none', outline: 'none',
+                    fontSize: 13, fontWeight: 500, color: 'var(--text)', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  <option value="">— Seleccionar —</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id} disabled={String(a.id) === String(form.transfer_to_account_id)}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--bg-card)' }}>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>
+                  Hacia
+                </div>
+                <select
+                  value={form.transfer_to_account_id}
+                  onChange={e => setForm({ ...form, transfer_to_account_id: e.target.value })}
+                  required
+                  style={{
+                    width: '100%', background: 'transparent', border: 'none', outline: 'none',
+                    fontSize: 13, fontWeight: 500, color: 'var(--text)', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  <option value="">— Seleccionar —</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id} disabled={String(a.id) === String(form.transfer_from_account_id)}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            /* ── Category chips ──────────────────────────────────── */
+            <div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 8 }}>
+                Categoría
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 140, overflowY: 'auto' }}>
+                {filteredCats.map(c => {
+                  const sel = String(form.category_id) === String(c.id);
+                  return (
+                    <button key={c.id} type="button"
+                      onClick={() => setForm({ ...form, category_id: c.id })}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '6px 12px', borderRadius: 999,
+                        fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                        border: `1.5px solid ${sel ? (c.color || 'var(--c500)') : 'var(--border)'}`,
+                        background: sel ? `${c.color || 'var(--c500)'}18` : 'transparent',
+                        color: sel ? (c.color || 'var(--c500)') : 'var(--text-muted)',
+                        transition: 'all .15s',
+                      }}
+                    >
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.color || 'var(--c500)', display: 'inline-block' }} />
+                      {c.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Account + Date tiles ──────────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: form.type !== 'transfer' && (accounts.length > 0 || creditCards.length > 0) ? '1fr 1fr' : '1fr', gap: 8 }}>
+            {/* Account / payment method tile (not for transfers — already shows from/to) */}
+            {form.type !== 'transfer' && (accounts.length > 0 || creditCards.length > 0) && (() => {
+              const payMethod = form.payment_method || 'cash';
+              const showCard  = creditCards.length > 0 && form.type === 'expense' && !form.debt_id && !form.savings_goal_id;
+              const PayIcon   = payMethod === 'card' ? CreditCard : payMethod === 'debit' ? Landmark : Wallet;
+              return (
+                <div style={{ padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--bg-card)' }}>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>
+                    Cuenta
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <PayIcon size={14} style={{ color: 'var(--c500)', flexShrink: 0 }} />
+                    <select
+                      value={payMethod === 'card' ? `card:${form.credit_card_id || ''}` : payMethod === 'debit' ? `debit:${form.account_id || ''}` : 'cash'}
+                      onChange={e => {
+                        const [m, id] = e.target.value.split(':');
+                        if (m === 'card')       setForm(f => ({ ...f, payment_method: 'card',  credit_card_id: id, account_id: '' }));
+                        else if (m === 'debit') setForm(f => ({ ...f, payment_method: 'debit', account_id: id,     credit_card_id: '' }));
+                        else                    setForm(f => ({ ...f, payment_method: 'cash',  account_id: '',     credit_card_id: '' }));
+                      }}
+                      style={{
+                        flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                        fontSize: 13, fontWeight: 500, color: 'var(--text)', cursor: 'pointer',
+                        fontFamily: 'var(--fb)', padding: 0,
+                      }}
+                    >
+                      <option value="cash">Efectivo</option>
+                      {accounts.map(a => <option key={`d${a.id}`} value={`debit:${a.id}`}>{a.name}</option>)}
+                      {showCard && creditCards.map(c => <option key={`c${c.id}`} value={`card:${c.id}`}>{c.name}{c.last_four ? ` ···${c.last_four}` : ''}</option>)}
+                    </select>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Date tile */}
+            <div style={{ padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--bg-card)' }}>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>
+                Fecha
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Calendar size={14} style={{ color: 'var(--c500)', flexShrink: 0 }} />
+                <input
+                  type="date"
+                  value={form.txn_date}
+                  onChange={e => setForm({ ...form, txn_date: e.target.value })}
+                  required
+                  style={{
+                    flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                    fontSize: 13, fontWeight: 500, color: 'var(--text)', cursor: 'pointer',
+                    fontFamily: 'var(--fb)', padding: 0,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Debt link (optional) ──────────────────────────────── */}
+          {form.type === 'expense' && activeDebts.length > 0 && form.type !== 'transfer' && (
+            <div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                Vincular a deuda (opcional)
+              </div>
+              <select
+                className="input"
+                value={form.debt_id}
+                onChange={e => setForm({ ...form, debt_id: e.target.value, savings_goal_id: '' })}
+              >
+                <option value="">— Ninguna —</option>
+                {activeDebts.map(d => (
+                  <option key={d.id} value={d.id}>{d.name} — saldo: {fmt.currency(d.current_balance, currency)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {form.debt_id && (
+            <div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                Abono extra a capital
+              </div>
+              <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
+                value={form.extra_principal} onChange={e => setForm({ ...form, extra_principal: e.target.value })} />
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Se aplica directo al capital y reduce intereses futuros</p>
+            </div>
+          )}
+
+          {form.type === 'expense' && !form.debt_id && activeGoals.length > 0 && form.type !== 'transfer' && (
+            <div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                Vincular a meta de ahorro (opcional)
+              </div>
+              <select
+                className="input"
+                value={form.savings_goal_id}
+                onChange={e => setForm({ ...form, savings_goal_id: e.target.value, credit_card_id: '' })}
+              >
+                <option value="">— Ninguna —</option>
+                {activeGoals.map(g => (
+                  <option key={g.id} value={g.id}>{g.name} — {Math.round((g.current_amount / g.target_amount) * 100)}% completada</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* ── Description (dashed note) ─────────────────────────── */}
+          <div style={{
+            padding: '10px 12px', borderRadius: 10,
+            border: '1.5px dashed var(--border)',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <FileText size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              type="text"
+              placeholder="Agregar nota (opcional)"
+              value={form.description}
+              onChange={e => setForm({ ...form, description: e.target.value })}
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                fontSize: 12, color: 'var(--text)', fontFamily: 'var(--fb)',
+              }}
+            />
+          </div>
+
+          {/* ── OCR (Pro only, new txn only) ──────────────────────── */}
+          {!editing && effectivePlan !== 'free' && form.type !== 'transfer' && (
             <>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={e => { handleCameraOcr(e.target.files[0]); e.target.value = ''; }}
-              />
-              <button
-                type="button"
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={e => { handleCameraOcr(e.target.files[0]); e.target.value = ''; }} />
+              <button type="button"
                 onClick={async () => {
                   if (Capacitor.isNativePlatform()) {
                     const file = await captureReceiptPhoto();
@@ -494,225 +872,39 @@ export default function Transactions() {
                   }
                 }}
                 disabled={ocrScanning}
-                className={clsx(
-                  'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm transition-all',
-                  ocrScanning
-                    ? 'border-brand-400 bg-brand-500/10 text-brand-400'
-                    : 'border-dashed border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400 hover:text-brand-400 hover:bg-brand-500/5'
-                )}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  padding: '10px 12px', borderRadius: 10, fontSize: 12, fontWeight: 500,
+                  cursor: 'pointer',
+                  border: ocrScanning ? '1.5px solid var(--c500)' : '1.5px dashed var(--border)',
+                  background: ocrScanning ? 'rgba(0,184,148,.08)' : 'transparent',
+                  color: ocrScanning ? 'var(--c500)' : 'var(--text-muted)',
+                }}
               >
                 {ocrScanning
-                  ? <><Loader2 size={15} className="animate-spin" /> Analizando recibo...</>
-                  : <><ScanLine size={15} /> Escanear recibo con cámara</>}
+                  ? <><Loader2 size={14} className="animate-spin" /> Analizando recibo…</>
+                  : <><ScanLine size={14} /> Escanear recibo con cámara</>}
               </button>
             </>
           )}
 
-          <div className={clsx('gap-3', accounts.length >= 2 && !editing ? 'grid grid-cols-3' : 'grid grid-cols-2')}>
-            {['income', 'expense'].map((tp) => (
-              <button key={tp} type="button"
-                onClick={() => setForm({ ...form, type: tp, category_id: '', debt_id: '', savings_goal_id: '', credit_card_id: '', transfer_from_account_id: '', transfer_to_account_id: '' })}
-                className={clsx(
-                  'p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2',
-                  form.type === tp
-                    ? tp === 'income' ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-600'
-                      : 'border-rose-500 bg-rose-50 dark:bg-rose-900/20 text-rose-600'
-                    : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
-                )}>
-                {tp === 'income' ? <ArrowUpCircle size={16} /> : <ArrowDownCircle size={16} />}
-                {tp === 'income' ? 'Ingreso' : 'Gasto'}
-              </button>
-            ))}
-            {accounts.length >= 2 && !editing && (
-              <button type="button"
-                onClick={() => setForm({ ...form, type: 'transfer', category_id: '', debt_id: '', savings_goal_id: '', credit_card_id: '', account_id: '' })}
-                className={clsx(
-                  'p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2',
-                  form.type === 'transfer'
-                    ? 'border-brand-500 bg-brand-500/10 text-brand-500'
-                    : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
-                )}>
-                <ArrowLeftRight size={16} /> Transferir
-              </button>
-            )}
-          </div>
-          {form.type === 'transfer' ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">Cuenta origen</label>
-                <select className="input" value={form.transfer_from_account_id}
-                  onChange={e => setForm({ ...form, transfer_from_account_id: e.target.value })} required>
-                  <option value="">— Seleccionar —</option>
-                  {accounts.map(a => (
-                    <option key={a.id} value={a.id} disabled={String(a.id) === String(form.transfer_to_account_id)}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Cuenta destino</label>
-                <select className="input" value={form.transfer_to_account_id}
-                  onChange={e => setForm({ ...form, transfer_to_account_id: e.target.value })} required>
-                  <option value="">— Seleccionar —</option>
-                  {accounts.map(a => (
-                    <option key={a.id} value={a.id} disabled={String(a.id) === String(form.transfer_from_account_id)}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label className="label">Categoría</label>
-              <select className="input" value={form.category_id} onChange={e => setForm({ ...form, category_id: e.target.value })} required>
-                <option value="">Seleccionar...</option>
-                {filteredCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Monto</label>
-              <input className="input" type="number" step="0.01" min="0.01" placeholder="0.00"
-                value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required />
-            </div>
-            <div>
-              <label className="label">Fecha</label>
-              <input className="input" type="date" value={form.txn_date}
-                onChange={e => setForm({ ...form, txn_date: e.target.value })} required />
-            </div>
-          </div>
-          <div>
-            <label className="label">Descripción (opcional)</label>
-            <input className="input" type="text" placeholder="Ej: Supermercado La Colonia"
-              value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          </div>
-          {form.type === 'expense' && activeDebts.length > 0 && form.type !== 'transfer' && (
-            <div>
-              <label className="label">Vincular a deuda (opcional)</label>
-              <select className="input" value={form.debt_id}
-                onChange={e => setForm({ ...form, debt_id: e.target.value, savings_goal_id: '' })}>
-                <option value="">— Ninguna —</option>
-                {activeDebts.map(d => (
-                  <option key={d.id} value={d.id}>{d.name} — saldo: {fmt.currency(d.current_balance, currency)}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {form.debt_id && (
-            <div>
-              <label className="label">Abono extra a capital (opcional)</label>
-              <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
-                value={form.extra_principal} onChange={e => setForm({ ...form, extra_principal: e.target.value })} />
-              <p className="text-xs text-[var(--text-muted)] mt-1">Se aplica directo al capital y reduce los intereses futuros</p>
-            </div>
-          )}
-          {form.type === 'expense' && !form.debt_id && activeGoals.length > 0 && form.type !== 'transfer' && (
-            <div>
-              <label className="label">Vincular a meta de ahorro (opcional)</label>
-              <select className="input" value={form.savings_goal_id}
-                onChange={e => setForm({ ...form, savings_goal_id: e.target.value, credit_card_id: '' })}>
-                <option value="">— Ninguna —</option>
-                {activeGoals.map(g => (
-                  <option key={g.id} value={g.id}>{g.name} — {Math.round((g.current_amount / g.target_amount) * 100)}% completada</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {/* ── Forma de pago (ocultar en transferencias) ── */}
-          {form.type !== 'transfer' && (accounts.length > 0 || creditCards.length > 0) && (() => {
-            const payMethod = form.payment_method || 'cash';
-            const setMethod = (m) => setForm(f => ({
-              ...f,
-              payment_method: m,
-              credit_card_id: m === 'card'  ? f.credit_card_id : '',
-              account_id:     m === 'debit' ? f.account_id     : '',
-            }));
-            const showCash  = true;
-            const showDebit = accounts.length > 0;
-            const showCard  = creditCards.length > 0 && form.type === 'expense' && !form.debt_id && !form.savings_goal_id;
-            const cols      = [showCash, showDebit, showCard].filter(Boolean).length;
-            return (
-              <div>
-                <label className="label">Forma de pago</label>
-                <div className={clsx(
-                  'grid gap-2 mb-2',
-                  cols === 3 ? 'grid-cols-1 sm:grid-cols-3' : cols === 2 ? 'grid-cols-2' : 'grid-cols-1'
-                )}>
-                  {showCash && (
-                    <button type="button" onClick={() => setMethod('cash')}
-                      className={clsx(
-                        'flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-sm font-medium transition-all',
-                        payMethod === 'cash'
-                          ? 'border-brand-500 bg-brand-500/10 text-brand-500'
-                          : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
-                      )}>
-                      💵 Efectivo
-                    </button>
-                  )}
-                  {showDebit && (
-                    <button type="button" onClick={() => setMethod('debit')}
-                      className={clsx(
-                        'flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-sm font-medium transition-all',
-                        payMethod === 'debit'
-                          ? 'border-brand-500 bg-brand-500/10 text-brand-500'
-                          : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
-                      )}>
-                      🏦 Débito / Cuenta
-                    </button>
-                  )}
-                  {showCard && (
-                    <button type="button" onClick={() => setMethod('card')}
-                      className={clsx(
-                        'flex items-center justify-center gap-2 py-3 px-3 rounded-xl border text-sm font-medium transition-all',
-                        payMethod === 'card'
-                          ? 'border-brand-500 bg-brand-500/10 text-brand-500'
-                          : 'border-[var(--border)] text-[var(--text-muted)] hover:border-brand-400'
-                      )}>
-                      💳 Tarjeta de crédito
-                    </button>
-                  )}
-                </div>
-                {payMethod === 'debit' && (
-                  <select className="input" value={form.account_id}
-                    onChange={e => setForm(f => ({ ...f, account_id: e.target.value }))}>
-                    <option value="">— Seleccionar cuenta —</option>
-                    {accounts.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.currency || 'USD'})</option>
-                    ))}
-                  </select>
-                )}
-                {payMethod === 'card' && (
-                  <>
-                    <select className="input" value={form.credit_card_id}
-                      onChange={e => setForm(f => ({ ...f, credit_card_id: e.target.value }))}>
-                      <option value="">— Seleccionar tarjeta —</option>
-                      {creditCards.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}{c.last_four ? ` ···${c.last_four}` : ''}</option>
-                      ))}
-                    </select>
-                    {form.credit_card_id && (
-                      <p className="text-xs text-[var(--text-muted)] mt-1">
-                        Este cargo no afectará tu saldo hasta que pagues la tarjeta.
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })()}
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={() => setModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
-            <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center">
-              {busy ? 'Guardando...' : editing ? 'Actualizar' : 'Guardar'}
+          {/* ── Submit ────────────────────────────────────────────── */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button type="button" onClick={() => setModal(false)} className="btn-secondary flex-1 justify-center" style={{ padding: '12px 0' }}>
+              Cancelar
+            </button>
+            <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center" style={{ padding: '12px 0' }}>
+              {busy ? 'Guardando…' : editing
+                ? 'Actualizar'
+                : form.type === 'transfer' ? 'Guardar transferencia'
+                : form.type === 'income' ? 'Guardar ingreso'
+                : 'Guardar gasto'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* ── Modal transacciones recurrentes ── */}
+      {/* ── Modal transacciones recurrentes ─────────────────────── */}
       <Modal open={recModal} onClose={() => { setRecModal(false); setShowRecForm(false); }} title="Transacciones recurrentes" size="lg">
         <div className="space-y-4">
           {!showRecForm ? (
@@ -734,17 +926,23 @@ export default function Transactions() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium truncate">{r.description || r.category_name}</p>
-                          <span className={clsx('text-xs px-1.5 py-0.5 rounded-full font-medium', FREQ_COLOR[r.frequency])}>
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999,
+                            background: 'var(--surface-2)', color: 'var(--text-muted)',
+                          }}>
                             {FREQ_LABEL[r.frequency]}
                           </span>
-                          {!r.is_active && <span className="text-xs px-1.5 py-0.5 rounded-full bg-surface-100 dark:bg-surface-700 text-[var(--text-muted)]">Pausada</span>}
+                          {!r.is_active && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--text-muted)' }}>Pausada</span>}
                         </div>
                         <p className="text-xs text-[var(--text-muted)]">
                           Próx. {fmt.date(r.next_date)} · {r.category_name}
                         </p>
                       </div>
-                      <span className={clsx('text-sm font-semibold text-mono flex-shrink-0', r.type === 'income' ? 'text-income' : 'text-expense')}>
-                        {r.type === 'income' ? '+' : '-'}{fmt.currency(r.amount, currency)}
+                      <span style={{
+                        fontSize: 13, fontWeight: 600, fontFamily: 'var(--fm)', flexShrink: 0,
+                        color: r.type === 'income' ? 'var(--c500)' : 'var(--text)',
+                      }}>
+                        {r.type === 'income' ? '+' : '−'}{fmt.currency(r.amount, currency)}
                       </span>
                       <div className="flex gap-1 flex-shrink-0">
                         <button onClick={() => toggleActive(r)} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700" title={r.is_active ? 'Pausar' : 'Reanudar'}>
@@ -854,16 +1052,11 @@ export default function Transactions() {
                       <option key={c.id} value={c.id}>{c.name}{c.last_four ? ` ···${c.last_four}` : ''}</option>
                     ))}
                   </select>
-                  {recForm.credit_card_id && (
-                    <p className="text-xs text-[var(--text-muted)] mt-1">
-                      Este cargo recurrente se cargará a la tarjeta automáticamente.
-                    </p>
-                  )}
                 </div>
               )}
 
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => { setShowRecForm(false); setEditingRec(null); }} className="btn-ghost flex-1 justify-center">Cancelar</button>
+                <button type="button" onClick={() => { setShowRecForm(false); setEditingRec(null); }} className="btn-secondary flex-1 justify-center">Cancelar</button>
                 <button type="submit" disabled={recBusy} className="btn-primary flex-1 justify-center">
                   {recBusy ? 'Guardando...' : editingRec ? 'Actualizar' : 'Guardar'}
                 </button>

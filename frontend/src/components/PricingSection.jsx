@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, X, Zap, Users, Crown } from 'lucide-react';
+import { CheckCircle2, Check, X, Zap, Users, Crown } from 'lucide-react';
 
 const PLANS = [
   {
@@ -180,8 +180,8 @@ export default function PricingSection({
                       </p>
                     )}
                     {plan.trial && !annual && (
-                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
-                        ✓ {plan.trial}
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1">
+                        <Check size={12} strokeWidth={3} /> {plan.trial}
                       </p>
                     )}
                   </div>

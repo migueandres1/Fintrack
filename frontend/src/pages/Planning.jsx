@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Target, TrendingDown, Calendar, AlertTriangle, CheckCircle2, Info, ChevronDown, ChevronUp, CalendarPlus } from 'lucide-react';
+import { Target, TrendingDown, Calendar, AlertTriangle, CheckCircle2, Info, ChevronDown, ChevronUp, CalendarPlus, BarChart3 } from 'lucide-react';
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -256,8 +256,8 @@ export default function Planning() {
   if (effectivePlan === 'free') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4 text-3xl">
-          📊
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4 text-indigo-400">
+          <BarChart3 size={30} />
         </div>
         <h2 className="text-display font-bold text-xl mb-2">Cash flow y planificación</h2>
         <p className="text-[var(--text-muted)] text-sm max-w-xs mb-6">
@@ -300,7 +300,7 @@ export default function Planning() {
                 { label: 'Ingresos recurrentes', value: monthlyIncome,    sub: `${activeRec.filter(r => r.type === 'income').length} fuentes`,      color: 'text-green-500' },
                 { label: 'Gastos fijos',         value: monthlyFixed,     sub: `${activeRec.filter(r => r.type === 'expense').length} recurrentes`, color: 'text-[var(--text)]' },
                 { label: 'Cuotas de deuda',      value: monthlyDebts,     sub: `${activeDebts.length} deuda${activeDebts.length !== 1 ? 's' : ''}`,  color: 'text-rose-500' },
-                { label: 'Disponible',           value: freeCash,         sub: freeCash < 0 ? '⚠ déficit mensual' : 'después de compromisos',       color: freeCash >= 0 ? 'text-green-500' : 'text-rose-500' },
+                { label: 'Disponible',           value: freeCash,         sub: freeCash < 0 ? 'déficit mensual' : 'después de compromisos',       color: freeCash >= 0 ? 'text-green-500' : 'text-rose-500' },
               ].map(({ label, value, sub, color }) => (
                 <div key={label}>
                   <p className="text-xs text-[var(--text-muted)] mb-0.5">{label}</p>
@@ -369,7 +369,7 @@ export default function Planning() {
           </h2>
 
           {activeDebts.length === 0 ? (
-            <p className="text-xs text-[var(--text-muted)] py-6 text-center">Sin deudas activas 🎉</p>
+            <p className="text-xs text-[var(--text-muted)] py-6 text-center flex items-center justify-center gap-1.5"><CheckCircle2 size={13} className="text-green-500" /> Sin deudas activas</p>
           ) : (
             <>
               {/* Resumen rápido */}

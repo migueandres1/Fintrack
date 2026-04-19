@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MoniFlow — Logo 02
+  Variación: Marca completa sobre fondo oscuro
+  Uso: Hero sections, footer, sidebar, dark mode, header oscuro
+  Fondo recomendado: #0b1712 o #152a1e
+  Tamaño mínimo: 120px de ancho
+-->
+<svg width="220" height="56"
+     viewBox="0 0 220 56"
+     xmlns="http://www.w3.org/2000/svg"
+     role="img"
+     aria-label="MoniFlow">
+  <title>MoniFlow</title>
+  <desc>MoniFlow — marca completa sobre fondo oscuro</desc>
+  <g transform="translate(2, 0) scale(0.50)">
+    <rect x="0"  y="0" width="20" height="100" fill="#f0f5f3"/>
+    <polygon points="20,0 40,0 50,52 30,52" fill="#f0f5f3"/>
+    <polygon points="60,0 80,0 70,52 50,52" fill="#f0f5f3"/>
+    <rect x="80" y="0" width="20" height="100" fill="#f0f5f3"/>
+    <rect x="32" y="72" width="11" height="28" rx="1.5" fill="#00b894"/>
+    <rect x="44" y="56" width="13" height="44" rx="1.5" fill="#00b894"/>
+    <rect x="58" y="72" width="11" height="28" rx="1.5" fill="#00b894"/>
+  </g>
+  <text x="58" y="37"
+        font-family="'DM Sans', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="600"
+        font-size="26"
+        letter-spacing="-0.25"
+        fill="#f0f5f3">MoniFlow</text>
+</svg>

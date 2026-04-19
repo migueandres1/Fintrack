@@ -1,23 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, Calculator } from 'lucide-react';
+import { Plus, Pencil, Trash2, CreditCard, ChevronDown, ChevronUp, Calculator, AlertTriangle } from 'lucide-react';
 import { useStore } from '../store/index.js';
 import { fmt, localDate } from '../utils/format.js';
-import { Modal, Confirm, ProgressBar, Empty, Spinner } from '../components/ui/index.jsx';
+import { Modal, Confirm, Empty, Spinner } from '../components/ui/index.jsx';
 import UpgradeModal from '../components/UpgradeModal.jsx';
 import api   from '../services/api.js';
 import clsx  from 'clsx';
 
-const COLORS = ['#6366f1','#22c55e','#f59e0b','#3b82f6','#ec4899','#14b8a6','#f97316','#8b5cf6','#ef4444'];
+const COLORS = ['#00b894','#55d8b4','#6366f1','#22c55e','#f59e0b','#3b82f6','#ec4899','#14b8a6','#f97316'];
 
 const EMPTY_CARD = {
   name: '', last_four: '', credit_limit: '', billing_day: 1, due_day: 20, initial_balance: '',
-  color: '#6366f1', notes: '',
+  color: '#00b894', notes: '',
 };
 const EMPTY_PAY = {
   amount: '', txn_date: localDate(), notes: '', account_id: '',
 };
 
-// Simulates months to pay off and total interest given a fixed monthly payment
 function simulatePayoff(balance, monthlyRate, payment) {
   if (balance <= 0 || payment <= 0) return { months: 0, totalInterest: 0 };
   if (monthlyRate <= 0) return { months: Math.ceil(balance / payment), totalInterest: 0 };
@@ -27,7 +26,7 @@ function simulatePayoff(balance, monthlyRate, payment) {
     interest += int;
     bal = bal + int - payment;
     months++;
-    if (payment <= bal * monthlyRate + 0.01) { months = 600; break; } // payment too small
+    if (payment <= bal * monthlyRate + 0.01) { months = 600; break; }
   }
   return { months, totalInterest: +interest.toFixed(2) };
 }
@@ -39,54 +38,50 @@ function MinPaySimulator({ balance, currency }) {
   const r = (rate / 100) / 12;
   const minPay = Math.max(balance * 0.02, 10);
   const minSim = simulatePayoff(balance, r, minPay);
-  const totalSim = simulatePayoff(balance, r, balance); // pay off in 1 month
   return (
-    <div className="mt-3 border-t border-[var(--border)] pt-3">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors w-full"
-      >
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+      <button onClick={() => setOpen(v => !v)} style={{
+        display: 'flex', alignItems: 'center', gap: 6, fontSize: 11,
+        color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', width: '100%',
+      }}>
         <Calculator size={13} />
-        {open ? 'Ocultar simulador' : 'Simulador: mínimo vs total'}
-        {open ? <ChevronUp size={12} className="ml-auto" /> : <ChevronDown size={12} className="ml-auto" />}
+        {open ? 'Ocultar simulador' : 'Simulador: pago mínimo vs. total'}
+        {open ? <ChevronUp size={11} style={{ marginLeft: 'auto' }} /> : <ChevronDown size={11} style={{ marginLeft: 'auto' }} />}
       </button>
       {open && (
-        <div className="mt-3 space-y-3 animate-fade-up">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-[var(--text-muted)] flex-shrink-0">Tasa anual:</label>
-            <input
-              type="number" min="1" max="200" step="0.5"
-              value={rate}
+        <div style={{ marginTop: 10 }} className="animate-fade-up space-y-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>Tasa anual:</label>
+            <input type="number" min="1" max="200" step="0.5" value={rate}
               onChange={e => setRate(Number(e.target.value) || 24)}
-              className="input !py-1 !text-xs w-20"
-            />
-            <span className="text-xs text-[var(--text-muted)]">%</span>
+              className="input" style={{ padding: '4px 8px', fontSize: 11, width: 70 }} />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>%</span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800">
-              <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 mb-1.5">Solo mínimo</p>
-              <p className="text-xs text-[var(--text-muted)]">Pago mensual</p>
-              <p className="font-bold text-sm text-mono text-rose-500">{fmt.currency(minPay, currency)}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Meses</p>
-              <p className="font-semibold text-sm">{minSim.months >= 600 ? '∞' : minSim.months}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Intereses totales</p>
-              <p className="font-bold text-sm text-mono text-rose-500">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div style={{ padding: 12, borderRadius: 12, background: 'rgba(229,62,62,.06)', border: '1px solid rgba(229,62,62,.15)' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#e53e3e', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.08em' }}>Solo mínimo</p>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)' }}>Pago mensual</p>
+              <p style={{ fontWeight: 700, fontSize: 13, fontFamily: 'var(--fm)', color: '#e53e3e' }}>{fmt.currency(minPay, currency)}</p>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Meses</p>
+              <p style={{ fontWeight: 600, fontSize: 13 }}>{minSim.months >= 600 ? '∞' : minSim.months}</p>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Intereses</p>
+              <p style={{ fontWeight: 700, fontSize: 13, fontFamily: 'var(--fm)', color: '#e53e3e' }}>
                 {minSim.months >= 600 ? '∞' : fmt.currency(minSim.totalInterest, currency)}
               </p>
             </div>
-            <div className="p-2.5 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
-              <p className="text-[10px] font-semibold text-green-600 dark:text-green-400 mb-1.5">Pago total</p>
-              <p className="text-xs text-[var(--text-muted)]">Pago mensual</p>
-              <p className="font-bold text-sm text-mono text-green-500">{fmt.currency(balance, currency)}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Meses</p>
-              <p className="font-semibold text-sm">1</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Intereses totales</p>
-              <p className="font-bold text-sm text-mono text-green-500">{fmt.currency(0, currency)}</p>
+            <div style={{ padding: 12, borderRadius: 12, background: 'rgba(0,184,148,.06)', border: '1px solid rgba(0,184,148,.15)' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--c500)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.08em' }}>Pago total</p>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)' }}>Pago mensual</p>
+              <p style={{ fontWeight: 700, fontSize: 13, fontFamily: 'var(--fm)', color: 'var(--c500)' }}>{fmt.currency(balance, currency)}</p>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Meses</p>
+              <p style={{ fontWeight: 600, fontSize: 13 }}>1</p>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>Intereses</p>
+              <p style={{ fontWeight: 700, fontSize: 13, fontFamily: 'var(--fm)', color: 'var(--c500)' }}>{fmt.currency(0, currency)}</p>
             </div>
           </div>
           {minSim.months < 600 && minSim.totalInterest > 0 && (
-            <p className="text-[10px] text-[var(--text-muted)] text-center">
-              Pagando solo el mínimo gastarías <strong className="text-rose-500">{fmt.currency(minSim.totalInterest, currency)}</strong> extra en intereses.
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center' }}>
+              Pagando solo el mínimo gastarías <strong style={{ color: '#e53e3e' }}>{fmt.currency(minSim.totalInterest, currency)}</strong> extra en intereses.
             </p>
           )}
         </div>
@@ -95,140 +90,191 @@ function MinPaySimulator({ balance, currency }) {
   );
 }
 
-function CardItem({ card, currency, onEdit, onDelete, onPay }) {
-  const [expanded, setExpanded]   = useState(false);
-  const [txns,     setTxns]       = useState(null);
-  const [loading,  setLoading]    = useState(false);
+// Dark credit card visual
+function CardVisual({ card, index, userName }) {
+  const isCaribe = index === 0;
+  const holder = (userName || card.name || 'Titular').toUpperCase();
+  const bin    = card.last_four || '0000';
+  const prefix = (card.bin_prefix || (isCaribe ? '5412' : '4012'));
+  const expMonth = String(card.due_day || card.billing_day || 1).padStart(2, '0');
+  const expYear  = '29';
 
-  const utilPct  = Math.min(100, card.utilization || 0);
-  const utilColor = utilPct > 80 ? '#ef4444' : utilPct > 50 ? '#f59e0b' : '#22c55e';
+  return (
+    <div className={`cc ${isCaribe ? 'caribe' : ''}`}>
+      <div className="cc-top">
+        <div className="cc-brand">MoniFlow</div>
+        <div className="cc-chip" />
+      </div>
+      <div className="cc-num">{prefix} •••• •••• {bin}</div>
+      <div className="cc-bottom">
+        <div>
+          <div className="lbl">Titular</div>
+          <span style={{ fontWeight: 600 }}>{holder}</span>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="lbl">Vence</div>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--fm)' }}>{expMonth}/{expYear}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CardItem({ card, currency, onEdit, onDelete, onPay, index, userName }) {
+  const [expanded, setExpanded] = useState(false);
+  const [txns,     setTxns]     = useState(null);
+  const [loading,  setLoading]  = useState(false);
+
+  const utilPct   = Math.min(100, card.utilization || 0);
+  const utilColor = utilPct > 80 ? '#e53e3e' : utilPct > 50 ? '#f0a500' : 'var(--c500)';
+
+  const today  = new Date();
+  const dueDay = Math.max(1, Math.min(31, Number(card.due_day) || 20));
+  const clampDay = (y, m) => Math.min(dueDay, new Date(y, m + 1, 0).getDate());
+  let nextDue  = new Date(today.getFullYear(), today.getMonth(), clampDay(today.getFullYear(), today.getMonth()));
+  if (nextDue <= today) {
+    const nm = today.getMonth() + 1;
+    const ny = nm > 11 ? today.getFullYear() + 1 : today.getFullYear();
+    nextDue  = new Date(ny, nm % 12, clampDay(ny, nm % 12));
+  }
 
   const loadTxns = async () => {
     if (txns) { setExpanded(!expanded); return; }
     setLoading(true);
     try {
       const { data } = await api.get(`/credit-cards/${card.id}/transactions`);
-      setTxns(data);
-      setExpanded(true);
+      setTxns(data); setExpanded(true);
     } finally { setLoading(false); }
   };
 
-  // Determine next due date
-  const today   = new Date();
-  const dueDay  = Math.max(1, Math.min(31, Number(card.due_day) || 20));
-  const clampDay = (y, m) => Math.min(dueDay, new Date(y, m + 1, 0).getDate());
-  let nextDue   = new Date(today.getFullYear(), today.getMonth(), clampDay(today.getFullYear(), today.getMonth()));
-  if (nextDue <= today) {
-    const nm = today.getMonth() + 1;
-    const ny = nm > 11 ? today.getFullYear() + 1 : today.getFullYear();
-    nextDue  = new Date(ny, nm % 12, clampDay(ny, nm % 12));
-  }
-  const nextDueStr = localDate(nextDue);
-
   return (
-    <div className="card transition-all">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${card.color}20`, color: card.color }}>
-            <CreditCard size={18} />
-          </div>
+    <div className="card animate-fade-up" style={{ overflow: 'hidden', padding: 0 }}>
+      {/* Card visual */}
+      <div style={{ padding: '16px 16px 0', maxWidth: 340, margin: '0 auto', width: '100%' }}>
+        <CardVisual card={card} index={index} userName={userName} />
+      </div>
+
+      {/* Card info */}
+      <div style={{ padding: '16px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
           <div>
-            <h3 className="font-semibold text-sm">
-              {card.name}{card.last_four && <span className="text-[var(--text-muted)] font-normal"> ···{card.last_four}</span>}
-            </h3>
-            <p className="text-xs text-[var(--text-muted)]">
-              Corte día {card.billing_day} · Pago día {card.due_day}
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-1">
-          <button onClick={() => onPay(card)}
-            className="px-2 py-1 rounded-lg text-xs font-medium bg-brand-500/10 text-brand-500 hover:bg-brand-500/20 transition-colors">
-            + Pago
-          </button>
-          <button onClick={() => onEdit(card)} className="p-1.5 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700">
-            <Pencil size={13} className="text-[var(--text-muted)]" />
-          </button>
-          <button onClick={() => onDelete(card)} className="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20">
-            <Trash2 size={13} className="text-rose-400" />
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div>
-          <p className="text-xs text-[var(--text-muted)]">Saldo pendiente</p>
-          <p className="text-display font-bold text-base text-mono" style={{ color: card.current_balance > 0 ? '#f43f5e' : '#22c55e' }}>
-            {fmt.currency(card.current_balance, currency)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--text-muted)]">Límite</p>
-          <p className="font-semibold text-sm text-mono">{fmt.currency(card.credit_limit, currency)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--text-muted)]">Próximo pago</p>
-          <p className="font-semibold text-sm">{fmt.date(nextDueStr)}</p>
-        </div>
-      </div>
-
-      {Number(card.credit_limit) > 0 && (
-        <div className="mb-3">
-          <div className="flex justify-between text-xs mb-1">
-            <span className="text-[var(--text-muted)]">Utilización</span>
-            <span className="font-medium" style={{ color: utilColor }}>{utilPct.toFixed(1)}%</span>
-          </div>
-          <ProgressBar value={utilPct} max={100} color={utilColor} />
-          {utilPct > 80 && (
-            <p className="text-xs text-rose-500 mt-1">⚠ Alta utilización. Puede afectar tu historial crediticio.</p>
-          )}
-        </div>
-      )}
-
-      <MinPaySimulator balance={card.current_balance} currency={currency} />
-
-      <button onClick={loadTxns} disabled={loading}
-        className="mt-3 w-full flex items-center justify-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] py-1 transition-colors">
-        {loading ? 'Cargando...' : expanded
-          ? <><ChevronUp size={14} /> Ocultar movimientos</>
-          : <><ChevronDown size={14} /> Ver movimientos recientes</>}
-      </button>
-
-      {expanded && txns !== null && (
-        <div className="mt-4 pt-4 border-t border-[var(--border)] animate-fade-up">
-          {txns.length === 0 ? (
-            <p className="text-xs text-[var(--text-muted)] text-center py-2">Sin movimientos registrados</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-[var(--text-muted)] border-b border-[var(--border)]">
-                    <th className="text-left py-1.5">Fecha</th>
-                    <th className="text-left py-1.5 pl-2">Descripción</th>
-                    <th className="text-right py-1.5">Monto</th>
-                    <th className="text-right py-1.5">Tipo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {txns.map(t => (
-                    <tr key={t.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/50">
-                      <td className="py-1.5">{fmt.date(t.txn_date)}</td>
-                      <td className="py-1.5 pl-2 max-w-[120px] truncate">{t.description || t.category_name}</td>
-                      <td className="text-right font-medium text-mono">{fmt.currency(t.amount, currency)}</td>
-                      <td className="text-right">
-                        {t.is_card_payment
-                          ? <span className="text-green-600 bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded">Pago</span>
-                          : <span className="text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded">Cargo</span>
-                        }
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+              {card.name}
+              {card.last_four && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> ···{card.last_four}</span>}
             </div>
-          )}
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              Corte día {card.billing_day} · Pago día {card.due_day}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button onClick={() => onPay(card)} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px',
+              borderRadius: 20, background: 'rgba(0,184,148,.1)', color: 'var(--c500)',
+              border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}>
+              + Pago
+            </button>
+            <button onClick={() => onEdit(card)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
+              <Pencil size={13} />
+            </button>
+            <button onClick={() => onDelete(card)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', padding: 4 }}>
+              <Trash2 size={13} />
+            </button>
+          </div>
         </div>
-      )}
+
+        {/* Stats grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 14 }}>
+          <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)' }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.1em', fontWeight: 600 }}>Saldo</div>
+            <div style={{ fontFamily: 'var(--fm)', fontWeight: 600, fontSize: 13, color: card.current_balance > 0 ? '#e53e3e' : 'var(--c500)', marginTop: 3 }}>
+              {fmt.currency(card.current_balance, currency)}
+            </div>
+          </div>
+          <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)' }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.1em', fontWeight: 600 }}>Límite</div>
+            <div style={{ fontFamily: 'var(--fm)', fontWeight: 600, fontSize: 13, color: 'var(--text)', marginTop: 3 }}>
+              {fmt.currency(card.credit_limit, currency)}
+            </div>
+          </div>
+          <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)' }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.1em', fontWeight: 600 }}>Próximo</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginTop: 3 }}>
+              {nextDue.toLocaleDateString('es-SV', { day: 'numeric', month: 'short' })}
+            </div>
+          </div>
+        </div>
+
+        {/* Utilization bar */}
+        {Number(card.credit_limit) > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 5, color: 'var(--text-muted)' }}>
+              <span>Utilización</span>
+              <span style={{ fontFamily: 'var(--fm)', fontWeight: 600, color: utilColor }}>{utilPct.toFixed(1)}%</span>
+            </div>
+            <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${utilPct}%`, height: '100%', background: utilColor, borderRadius: 3, transition: 'width .4s ease' }} />
+            </div>
+            {utilPct > 80 && (
+              <p style={{ fontSize: 10, color: '#e53e3e', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <AlertTriangle size={10} /> Alta utilización. Puede afectar tu historial crediticio.
+              </p>
+            )}
+          </div>
+        )}
+
+        <MinPaySimulator balance={card.current_balance} currency={currency} />
+
+        <button onClick={loadTxns} disabled={loading} style={{
+          marginTop: 12, width: '100%', fontSize: 11, color: 'var(--text-muted)',
+          background: 'none', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          paddingTop: 12, borderTop: '1px solid var(--border)',
+        }}>
+          {loading ? 'Cargando…' : expanded
+            ? <><ChevronUp size={12} /> Ocultar movimientos</>
+            : <><ChevronDown size={12} /> Ver movimientos recientes</>
+          }
+        </button>
+
+        {expanded && txns !== null && (
+          <div style={{ marginTop: 10 }} className="animate-fade-up">
+            {txns.length === 0 ? (
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '8px 0' }}>Sin movimientos registrados</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'left', paddingBottom: 6 }}>Fecha</th>
+                      <th style={{ textAlign: 'left', paddingBottom: 6, paddingLeft: 8 }}>Descripción</th>
+                      <th style={{ textAlign: 'right', paddingBottom: 6 }}>Monto</th>
+                      <th style={{ textAlign: 'right', paddingBottom: 6 }}>Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {txns.map(t => (
+                      <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '6px 0', color: 'var(--text)' }}>{fmt.date(t.txn_date)}</td>
+                        <td style={{ padding: '6px 8px', color: 'var(--text)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {t.description || t.category_name}
+                        </td>
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--fm)', fontWeight: 500 }}>{fmt.currency(t.amount, currency)}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {t.is_card_payment
+                            ? <span style={{ color: 'var(--c500)', background: 'rgba(0,184,148,.1)', borderRadius: 4, padding: '2px 6px' }}>Pago</span>
+                            : <span style={{ color: '#e53e3e', background: 'rgba(229,62,62,.08)', borderRadius: 4, padding: '2px 6px' }}>Cargo</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -260,12 +306,9 @@ export default function CreditCards() {
     if (effectivePlan === 'free' && creditCards.length >= 1) { setUpgradeModal(true); return; }
     setEditing(null); setForm(EMPTY_CARD); setModal(true);
   };
-  const openEdit   = (c) => {
+  const openEdit = (c) => {
     setEditing(c);
-    setForm({
-      name: c.name, last_four: c.last_four || '', credit_limit: c.credit_limit,
-      billing_day: c.billing_day, due_day: c.due_day, color: c.color, notes: c.notes || '',
-    });
+    setForm({ name: c.name, last_four: c.last_four || '', credit_limit: c.credit_limit, billing_day: c.billing_day, due_day: c.due_day, color: c.color || '#00b894', notes: c.notes || '' });
     setModal(true);
   };
   const openPay = (c) => { setPayCard(c); setPayForm(EMPTY_PAY); setPayModal(true); };
@@ -297,51 +340,68 @@ export default function CreditCards() {
 
   return (
     <div className="space-y-5 animate-fade-up">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-display font-bold text-xl">Tarjetas de crédito</h1>
-          <p className="text-[var(--text-muted)] text-sm">
-            {creditCards.length} tarjeta{creditCards.length !== 1 ? 's' : ''} registrada{creditCards.length !== 1 ? 's' : ''}
-          </p>
+
+      {/* ── Hero ──────────────────────────────────────────────────── */}
+      <div className="hero-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--c400)', letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 6 }}>
+              Tarjetas · {creditCards.length} registrada{creditCards.length !== 1 ? 's' : ''}
+            </div>
+            <div style={{ fontFamily: 'var(--fd)', fontWeight: 300, fontSize: 13, color: '#5a9070', marginBottom: 2 }}>Saldo pendiente total</div>
+            <span className="hero-amount">
+              <span className="cur">{currency}</span>
+              <span className="num">{Math.floor(totalBalance).toLocaleString()}</span>
+              <span className="cents">.{(totalBalance % 1).toFixed(2).slice(2)}</span>
+            </span>
+            {totalLimit > 0 && (
+              <div style={{ fontSize: 12, color: '#5a9070', marginTop: 4, fontFamily: 'var(--fm)' }}>
+                límite total {fmt.currency(totalLimit, currency)} · {totalLimit > 0 ? `${((totalBalance / totalLimit) * 100).toFixed(1)}% utilizado` : '—'}
+              </div>
+            )}
+          </div>
+          <button onClick={openCreate} className="btn-primary" style={{ flexShrink: 0 }}>
+            <Plus size={15} /> Nueva tarjeta
+          </button>
         </div>
-        <button onClick={openCreate} className="btn-primary"><Plus size={15} /> Nueva tarjeta</button>
       </div>
 
-      {creditCards.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="card">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Saldo total pendiente</p>
-            <p className="text-display font-bold text-xl text-mono text-rose-500">{fmt.currency(totalBalance, currency)}</p>
-          </div>
-          <div className="card">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Límite total</p>
-            <p className="text-display font-bold text-xl text-mono">{fmt.currency(totalLimit, currency)}</p>
-          </div>
-          <div className="card hidden sm:block">
-            <p className="text-xs text-[var(--text-muted)] mb-1">Utilización global</p>
-            <p className="text-display font-bold text-xl">
-              {totalLimit > 0 ? `${((totalBalance / totalLimit) * 100).toFixed(1)}%` : '—'}
-            </p>
-          </div>
-        </div>
-      )}
-
+      {/* ── Cards grid ────────────────────────────────────────────── */}
       {creditCardsLoading ? <Spinner /> : creditCards.length === 0 ? (
         <Empty icon={CreditCard} title="Sin tarjetas registradas"
           description="Agrega tus tarjetas de crédito para llevar control de tus cargos y pagos"
           action={<button onClick={openCreate} className="btn-primary text-xs">+ Nueva tarjeta</button>} />
       ) : (
-        <div className="grid lg:grid-cols-2 gap-4">
-          {creditCards.map(c => (
-            <CardItem key={c.id} card={c} currency={currency}
-              onEdit={openEdit} onDelete={setDeleting} onPay={openPay} />
-          ))}
-        </div>
+        <>
+          <div className="grid lg:grid-cols-2 gap-4">
+            {creditCards.map((c, i) => (
+              <CardItem key={c.id} card={c} currency={currency} index={i} userName={user?.name}
+                onEdit={openEdit} onDelete={setDeleting} onPay={openPay} />
+            ))}
+
+            {/* Add card placeholder */}
+            <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div onClick={openCreate} className="cc-add" style={{ width: '100%', maxWidth: 340, padding: 16 }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: '50%',
+                  background: 'rgba(0,184,148,.1)', color: 'var(--c500)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+                }}>
+                  <Plus size={18} />
+                </div>
+                <div style={{ fontFamily: 'var(--fd)', fontSize: 18, fontWeight: 300, fontStyle: 'italic', textAlign: 'center', color: 'var(--text)' }}>
+                  Agrega una tarjeta
+                </div>
+                <div style={{ fontSize: 11, marginTop: 2, textAlign: 'center' }}>Débito, crédito o prepago</div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       <UpgradeModal open={upgradeModal} onClose={() => setUpgradeModal(false)} feature="limit" />
 
-      {/* Modal crear/editar */}
+      {/* ── Modal crear/editar ────────────────────────────────────── */}
       <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Editar tarjeta' : 'Nueva tarjeta de crédito'}>
         <form onSubmit={save} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -368,13 +428,11 @@ export default function CreditCards() {
               <input className="input" type="number" step="0.01" min="0" placeholder="0.00"
                 value={editing ? '' : form.initial_balance}
                 onChange={e => setForm({ ...form, initial_balance: e.target.value })}
-                disabled={!!editing}
-                title={editing ? 'Registra un pago para actualizar el saldo' : ''}
-              />
-              {!editing && <p className="text-xs text-[var(--text-muted)] mt-1">El monto que ya debes al agregar la tarjeta. Deja en 0 si empiezas sin deuda.</p>}
-              {editing && <p className="text-xs text-[var(--text-muted)] mt-1">Para ajustar el saldo registra un pago o transacción.</p>}
+                disabled={!!editing} />
+              {editing && <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>Para ajustar el saldo registra un pago o transacción.</p>}
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Día de corte</label>
@@ -399,14 +457,8 @@ export default function CreditCards() {
             </div>
           </div>
 
-          <div>
-            <label className="label">Notas (opcional)</label>
-            <input className="input" type="text" placeholder="Ej: Visa clásica, sin anualidad"
-              value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-          </div>
-
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={() => setModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+            <button type="button" onClick={() => setModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center">
               {busy ? 'Guardando...' : editing ? 'Actualizar' : 'Guardar'}
             </button>
@@ -414,14 +466,11 @@ export default function CreditCards() {
         </form>
       </Modal>
 
-      {/* Modal pago */}
-      <Modal open={payModal} onClose={() => setPayModal(false)} title={`Pagar tarjeta – ${payCard?.name}`}>
+      {/* ── Pay Modal ────────────────────────────────────────────── */}
+      <Modal open={payModal} onClose={() => setPayModal(false)} title={`Pagar – ${payCard?.name}`}>
         <form onSubmit={savePay} className="space-y-4">
-          <div className="p-3 rounded-xl bg-surface-50 dark:bg-surface-800 text-xs">
-            <div className="flex justify-between">
-              <span className="text-[var(--text-muted)]">Saldo pendiente</span>
-              <span className="font-bold text-mono text-rose-500">{fmt.currency(payCard?.current_balance, currency)}</span>
-            </div>
+          <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)', fontSize: 12 }}>
+            Saldo pendiente: <strong style={{ color: '#e53e3e', fontFamily: 'var(--fm)' }}>{fmt.currency(payCard?.current_balance, currency)}</strong>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -437,21 +486,10 @@ export default function CreditCards() {
           </div>
           <div>
             <label className="label">Cuenta bancaria de débito</label>
-            <select
-              className="input"
-              value={payForm.account_id}
-              onChange={e => setPayForm({ ...payForm, account_id: e.target.value })}
-            >
+            <select className="input" value={payForm.account_id} onChange={e => setPayForm({ ...payForm, account_id: e.target.value })}>
               <option value="">— Sin vincular cuenta —</option>
-              {accounts.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
-            {payForm.account_id && (
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                El pago se descontará del saldo de esta cuenta.
-              </p>
-            )}
           </div>
           <div>
             <label className="label">Notas (opcional)</label>
@@ -459,7 +497,7 @@ export default function CreditCards() {
               value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} />
           </div>
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={() => setPayModal(false)} className="btn-ghost flex-1 justify-center">Cancelar</button>
+            <button type="button" onClick={() => setPayModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={busy} className="btn-primary flex-1 justify-center">
               {busy ? 'Registrando...' : 'Registrar pago'}
             </button>

@@ -52,3 +52,7 @@ desktop.ini
 *.local
 coverage/
 .nyc_output/
+
+# ── Local / design assets ─────────────────────────────────────
+Moniflow-handoff/
+CLAUDE.md

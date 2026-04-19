@@ -1,16 +1,15 @@
-import { useState }    from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { TrendingUp }  from 'lucide-react';
-import { useStore }    from '../store/index.js';
+import { useStore } from '../store/index.js';
 
-const CURRENCIES = ['USD','EUR','GTQ','HNL','CRC','MXN','COP','PEN','ARS','CLP','BRL'];
+const CURRENCIES = ['USD','EUR','MXN','GTQ','HNL','CRC','COP','PEN','ARS','CLP','BRL'];
 
 export default function Register() {
   const [form, setForm] = useState({ name: '', email: '', password: '', currency: 'USD' });
   const [err,  setErr]  = useState('');
   const [busy, setBusy] = useState(false);
-  const register   = useStore((s) => s.register);
-  const navigate   = useNavigate();
+  const register = useStore((s) => s.register);
+  const navigate = useNavigate();
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -29,18 +28,32 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-4">
-      <div className="w-full max-w-sm animate-fade-up">
+    <div
+      className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden"
+      style={{ background: 'var(--g950)' }}
+    >
+      <div className="absolute inset-0 topo opacity-50 pointer-events-none" />
+      <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: 'var(--c500)' }} />
+
+      <div className="relative z-10 w-full max-w-sm animate-fade-up">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center mb-3">
-            <TrendingUp size={24} className="text-white" />
+          <img src="/logo-light.svg" alt="MoniFlow" className="h-8 mb-6" />
+          <div
+            className="text-display font-light text-[42px] leading-none tracking-tight text-center"
+            style={{ color: '#f0f5f3', letterSpacing: '-.02em' }}
+          >
+            Empieza a<br />
+            <em className="italic" style={{ color: 'var(--c500)' }}>controlar</em> tu dinero.
           </div>
-          <h1 className="text-display font-semibold text-2xl">MoniFlow</h1>
-          <p className="text-[var(--text-muted)] text-sm mt-1">En tu idioma. Bajo tu control.</p>
+          <p className="text-sm mt-3 text-center" style={{ color: 'var(--g400)', fontFamily: 'var(--fd)', fontStyle: 'italic', fontSize: '16px' }}>
+            En tu idioma. Bajo tu control.
+          </p>
         </div>
 
-        <div className="card">
-          <h2 className="text-display font-bold text-base mb-4">Registro</h2>
+        <div
+          className="rounded-2xl p-6 flex flex-col gap-4"
+          style={{ background: 'var(--g900)', border: '1px solid var(--g800)' }}
+        >
           <form onSubmit={submit} className="flex flex-col gap-3">
             {[
               { label: 'Nombre completo', key: 'name',     type: 'text',     placeholder: 'Tu nombre' },
@@ -48,9 +61,10 @@ export default function Register() {
               { label: 'Contraseña',      key: 'password', type: 'password', placeholder: '••••••••' },
             ].map(({ label, key, type, placeholder }) => (
               <div key={key}>
-                <label className="label">{label}</label>
+                <label className="label" style={{ color: 'var(--g400)' }}>{label}</label>
                 <input
                   className="input"
+                  style={{ background: 'var(--g950)', border: '1.5px solid var(--g800)', color: '#f0f5f3' }}
                   type={type}
                   placeholder={placeholder}
                   value={form[key]}
@@ -61,26 +75,34 @@ export default function Register() {
             ))}
 
             <div>
-              <label className="label">Moneda</label>
-              <select className="input" value={form.currency} onChange={(e) => set('currency', e.target.value)}>
+              <label className="label" style={{ color: 'var(--g400)' }}>Moneda</label>
+              <select
+                className="input"
+                style={{ background: 'var(--g950)', border: '1.5px solid var(--g800)', color: '#f0f5f3' }}
+                value={form.currency}
+                onChange={(e) => set('currency', e.target.value)}
+              >
                 {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
 
             {err && (
-              <div className="text-rose-500 text-xs bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-3">
+              <div
+                className="text-xs rounded-xl p-3"
+                style={{ background: 'rgba(229,62,62,.1)', border: '1px solid rgba(229,62,62,.25)', color: '#fc8181' }}
+              >
                 {err}
               </div>
             )}
 
-            <button type="submit" disabled={busy} className="btn-primary w-full justify-center py-2.5 mt-1">
-              {busy ? 'Creando cuenta...' : 'Crear cuenta'}
+            <button type="submit" disabled={busy} className="btn-primary btn-lg w-full mt-1">
+              {busy ? 'Creando cuenta…' : 'Crear cuenta'}
             </button>
           </form>
 
-          <p className="text-center text-xs text-[var(--text-muted)] mt-4">
+          <p className="text-center text-xs" style={{ color: 'var(--g400)' }}>
             ¿Ya tienes cuenta?{' '}
-            <Link to="/login" className="text-brand-500 hover:underline font-medium">Inicia sesión</Link>
+            <Link to="/login" className="font-semibold" style={{ color: 'var(--c500)' }}>Inicia sesión</Link>
           </p>
         </div>
       </div>

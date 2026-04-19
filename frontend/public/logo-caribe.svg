@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<svg width="220" height="56" viewBox="0 0 220 56" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MoniFlow">
+  <title>MoniFlow — versión Caribe</title>
+  <desc>MoniFlow — marca completa versión Caribe, exclusiva sobre fondo oscuro</desc>
+  <g transform="translate(2, 0) scale(0.50)">
+    <rect x="0" y="0" width="20" height="100" fill="#00b894"></rect>
+    <polygon points="20,0 40,0 50,52 30,52" fill="#00b894"></polygon>
+    <polygon points="60,0 80,0 70,52 50,52" fill="#00b894"></polygon>
+    <rect x="80" y="0" width="20" height="100" fill="#00b894"></rect>
+    <rect x="32" y="72" width="11" height="28" rx="1.5" fill="#55d8b4"></rect>
+    <rect x="44" y="56" width="13" height="44" rx="1.5" fill="#55d8b4"></rect>
+    <rect x="58" y="72" width="11" height="28" rx="1.5" fill="#55d8b4"></rect>
+  </g>
+  <text x="58" y="37" font-family="&#39;DM Sans&#39;, &#39;Helvetica Neue&#39;, Arial, sans-serif" font-weight="600" font-size="26" letter-spacing="-0.25" fill="#f0f5f3">MoniFlow</text>
+</svg>
