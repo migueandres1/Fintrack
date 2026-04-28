@@ -33,7 +33,7 @@ const countAccounts   = (uid) => pool.query('SELECT COUNT(*) c FROM bank_account
 const countCards      = (uid) => pool.query('SELECT COUNT(*) c FROM credit_cards       WHERE user_id=?',[uid]).then(([r])=>r[0].c);
 const countGoals      = (uid) => pool.query('SELECT COUNT(*) c FROM savings_goals      WHERE user_id=?',[uid]).then(([r])=>r[0].c);
 const countTxMonth    = (uid) => pool.query(
-  "SELECT COUNT(*) c FROM transactions WHERE user_id=? AND DATE_FORMAT(date,'%Y-%m')=DATE_FORMAT(CURDATE(),'%Y-%m')",
+  "SELECT COUNT(*) c FROM transactions WHERE user_id=? AND DATE_FORMAT(txn_date,'%Y-%m')=DATE_FORMAT(CURDATE(),'%Y-%m')",
   [uid]
 ).then(([r])=>r[0].c);
 
